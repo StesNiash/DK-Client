@@ -1,2 +1,2 @@
-# DK-User
+# DK-Client
 DK opera extention for users
