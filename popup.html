@@ -1,0 +1,153 @@
+<!-- popup.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Investing Новости</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      margin: 10px;
+      width: 360px;
+      background: #f4f6f9;
+      color: #333;
+    }
+
+    #controls {
+      margin-bottom: 14px;
+      display: flex;
+      gap: 10px;
+    }
+
+    select {
+      flex: 1;
+      padding: 6px 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+      background: #fff;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      height: 36px;
+      text-align: center;
+      line-height: 24px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+      cursor: pointer;
+    }
+
+    #newsContainer {
+      max-height: 340px;
+      overflow-y: auto;
+      background: #fff;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      padding: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+
+    .news-item {
+      padding: 10px 8px;
+      margin-bottom: 8px;
+      background: #f9fafb;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+      transition: border-color 0.2s, transform 0.1s;
+      cursor: pointer;
+    }
+
+    .news-item:hover {
+      background-color: #f9fafb;
+      border-color: transparent;
+      transform: none;
+    }
+
+    .news-item.focused {
+      background-color: #e0f0ff;
+      border: 2px solid #007bff;
+      box-shadow: 0 0 6px rgba(0, 123, 255, 0.5);
+    }
+
+    .label {
+      font-weight: 600;
+      color: #555;
+    }
+
+    .stars {
+      color: #f39c12;
+      font-size: 14px;
+    }
+
+    #statusBar {
+      margin-top: 12px;
+      font-style: italic;
+      color: #007bff;
+      cursor: pointer;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    .actual, .forecast, .previous {
+      font-weight: 600;
+    }
+
+    .trade-buttons {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .trade-button {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    #buyButton {
+      background-color: #4CAF50;
+      color: white;
+    }
+
+    #buyButton:hover {
+      background-color: #45a049;
+    }
+
+    #sellButton {
+      background-color: #f44336;
+      color: white;
+    }
+
+    #sellButton:hover {
+      background-color: #d32f2f;
+    }
+  </style>
+</head>
+<body>
+  <div class="trade-buttons">
+    <button id="buyButton" class="trade-button">Купить</button>
+    <button id="sellButton" class="trade-button">Продать</button>
+  </div>
+
+  <div id="controls">
+    <select id="assetSelect">
+      <option value="">Выбор актива</option>
+    </select>
+    <select id="pairSelect" disabled>
+      <option value="">Выбор валютной пары</option>
+    </select>
+  </div>
+
+  <div id="newsContainer">Загрузка новостей...</div>
+  <div id="statusBar">Выберите новость для фокуса</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
