@@ -377,6 +377,59 @@ function populatePairSelect(asset) {
   }
 }
 
+const SERVER_URL = "https://your-server.com/api/login"; // Замените на ваш адрес
+
+function showLogin() {
+  document.getElementById("loginSection").style.display = "";
+  document.getElementById("mainSection").style.display = "none";
+}
+
+function showMain() {
+  document.getElementById("loginSection").style.display = "none";
+  document.getElementById("mainSection").style.display = "";
+}
+
+// Проверка токена при запуске
+chrome.storage.local.get("authToken", (result) => {
+  if (result.authToken) {
+    // Можно добавить проверку токена на сервере
+    showMain();
+  } else {
+    showLogin();
+  }
+});
+
+// Обработчик кнопки входа
+document.getElementById("loginButton")?.addEventListener("click", async () => {
+  const login = document.getElementById("loginInput").value.trim();
+  const password = document.getElementById("passwordInput").value.trim();
+  document.getElementById("loginError").textContent = "";
+
+  if (!login || !password) {
+    document.getElementById("loginError").textContent = "Введите логин и пароль";
+    return;
+  }
+
+  try {
+    const res = await fetch(SERVER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ login, password })
+    });
+    const data = await res.json();
+    if (data.success && data.token) {
+      chrome.storage.local.set({ authToken: data.token }, () => {
+        showMain();
+        location.reload(); // Перезагрузить для инициализации расширения
+      });
+    } else {
+      document.getElementById("loginError").textContent = "Неверный логин или пароль";
+    }
+  } catch (e) {
+    document.getElementById("loginError").textContent = "Ошибка соединения с сервером";
+  }
+});
+
 // Инициализация
 document.getElementById("assetSelect")?.addEventListener("change", (e) => {
   selectedAsset = e.target.value;

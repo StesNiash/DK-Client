@@ -128,25 +128,73 @@
     #sellButton:hover {
       background-color: #d32f2f;
     }
+
+    #loginSection {
+      margin-top: 20px;
+    }
+
+    #loginSection input {
+      width: calc(50% - 10px);
+      padding: 10px;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+
+    #loginButton {
+      width: 100%;
+      padding: 10px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    #loginButton:hover {
+      background-color: #0056b3;
+    }
+
+    #loginError {
+      margin-top: 10px;
+      font-size: 14px;
+      color: red;
+      text-align: center;
+    }
+
+    #mainSection {
+      display: none;
+    }
   </style>
 </head>
 <body>
-  <div class="trade-buttons">
-    <button id="buyButton" class="trade-button">Купить</button>
-    <button id="sellButton" class="trade-button">Продать</button>
+  <div id="loginSection">
+    <input type="text" id="loginInput" placeholder="Логин" />
+    <input type="password" id="passwordInput" placeholder="Пароль" />
+    <button id="loginButton">Войти</button>
+    <div id="loginError" style="color:red;"></div>
   </div>
+  <div id="mainSection" style="display:none;">
+    <div class="trade-buttons">
+      <button id="buyButton" class="trade-button">Купить</button>
+      <button id="sellButton" class="trade-button">Продать</button>
+    </div>
 
-  <div id="controls">
-    <select id="assetSelect">
-      <option value="">Выбор актива</option>
-    </select>
-    <select id="pairSelect" disabled>
-      <option value="">Выбор валютной пары</option>
-    </select>
+    <div id="controls">
+      <select id="assetSelect">
+        <option value="">Выбор актива</option>
+      </select>
+      <select id="pairSelect" disabled>
+        <option value="">Выбор валютной пары</option>
+      </select>
+    </div>
+
+    <div id="newsContainer">Загрузка новостей...</div>
+    <div id="statusBar">Выберите новость для фокуса</div>
   </div>
-
-  <div id="newsContainer">Загрузка новостей...</div>
-  <div id="statusBar">Выберите новость для фокуса</div>
 
   <script src="popup.js"></script>
 </body>
