@@ -5,6 +5,7 @@ let selectedPair = "";
 let lastProcessedFact = null;
 let processedNews = {}; // Для отслеживания обработанных новостей
 let initialNewsStates = {}; // Для хранения начального состояния новостей
+let autoClickInterval = null; // Для хранения интервала авто-кликов
 
 const TRADING_RULES = {
   "AUD": {
@@ -65,7 +66,7 @@ for (const asset in TRADING_RULES) {
   }
 }
 
-// Функция для клика по элементам (без изменений)
+// Функция для клика по элементам
 function clickElement(selector) {
   return new Promise((resolve) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -138,7 +139,7 @@ function hadFactInitially(newsItem) {
   return initialNewsStates[key]?.hasFact || false;
 }
 
-// Обработчики для кнопок Купить/Продать (без изменений)
+// Обработчики для кнопок Купить/Продать
 document.getElementById("buyButton")?.addEventListener("click", async () => {
   const result = await clickElement(".action-high-low.button-call-wrap a.btn.btn-call");
   if (result) {
@@ -244,7 +245,6 @@ function processNewsData(newsData) {
   }
 }
 
-// Остальные функции остаются без изменений
 function renderNews(newsList) {
   const container = document.getElementById("newsContainer");
   container.innerHTML = "";
@@ -362,7 +362,7 @@ function populateAssetSelect() {
 
 function populatePairSelect(asset) {
   const pairSelect = document.getElementById("pairSelect");
-  pairSelect.innerHTML = '<option value="">Выбор валютной пары</option>';
+  pairSelect.innerHTML = '<option value="">Валютная пара</option>';
 
   if (PAIRS[asset]) {
     pairSelect.disabled = false;
@@ -376,6 +376,63 @@ function populatePairSelect(asset) {
     pairSelect.disabled = true;
   }
 }
+
+// ========== Функции для тумблера авто-клика ==========
+document.getElementById("autoClickToggle").addEventListener("change", function(e) {
+  if (e.target.checked) {
+    startAutoClick();
+    document.getElementById("statusBar").textContent = "Автообновление включено";
+  } else {
+    stopAutoClick();
+    document.getElementById("statusBar").textContent = "Автообновление выключено";
+  }
+});
+
+function startAutoClick() {
+  // Кликаем сразу при включении
+  clickTodayButton();
+  
+  // Затем каждые 15 секунд
+  autoClickInterval = setInterval(clickTodayButton, 15000);
+}
+
+function stopAutoClick() {
+  if (autoClickInterval) {
+    clearInterval(autoClickInterval);
+    autoClickInterval = null;
+  }
+}
+
+function clickTodayButton() {
+  const selector = 'a#timeFrame_today.newBtn.toggleButton.LightGray';
+  
+  chrome.tabs.query({url: "https://ru.investing.com/*"}, (tabs) => {
+    if (tabs.length > 0) {
+      chrome.scripting.executeScript({
+        target: {tabId: tabs[0].id},
+        func: (sel) => {
+          const element = document.querySelector(sel);
+          if (element) {
+            element.click();
+            console.log("Клик по кнопке 'Сегодня' выполнен");
+            return true;
+          }
+          return false;
+        },
+        args: [selector]
+      }, (results) => {
+        if (chrome.runtime.lastError) {
+          console.error("Ошибка при клике:", chrome.runtime.lastError);
+        }
+      });
+    }
+  });
+}
+
+// Остановить интервал при закрытии попапа
+window.addEventListener('unload', () => {
+  stopAutoClick();
+});
 
 // Инициализация
 document.getElementById("assetSelect")?.addEventListener("change", (e) => {
