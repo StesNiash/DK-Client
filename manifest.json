@@ -10,8 +10,7 @@
     "activeTab"
   ],
   "host_permissions": [
-    "https://ru.investing.com/*",
-    "<all_urls>"
+    "https://ru.investing.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
