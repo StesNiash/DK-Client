@@ -377,6 +377,59 @@ function populatePairSelect(asset) {
   }
 }
 
+const SERVER_URL = "https://your-server.com/api/login"; // Замените на ваш адрес
+
+function showLogin() {
+  document.getElementById("loginSection").style.display = "";
+  document.getElementById("mainSection").style.display = "none";
+}
+
+function showMain() {
+  document.getElementById("loginSection").style.display = "none";
+  document.getElementById("mainSection").style.display = "";
+}
+
+// Проверка токена при запуске
+chrome.storage.local.get("authToken", (result) => {
+  if (result.authToken) {
+    // Можно добавить проверку токена на сервере
+    showMain();
+  } else {
+    showLogin();
+  }
+});
+
+// Обработчик кнопки входа
+document.getElementById("loginButton")?.addEventListener("click", async () => {
+  const login = document.getElementById("loginInput").value.trim();
+  const password = document.getElementById("passwordInput").value.trim();
+  document.getElementById("loginError").textContent = "";
+
+  if (!login || !password) {
+    document.getElementById("loginError").textContent = "Введите логин и пароль";
+    return;
+  }
+
+  try {
+    const res = await fetch(SERVER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ login, password })
+    });
+    const data = await res.json();
+    if (data.success && data.token) {
+      chrome.storage.local.set({ authToken: data.token }, () => {
+        showMain();
+        location.reload(); // Перезагрузить для инициализации расширения
+      });
+    } else {
+      document.getElementById("loginError").textContent = "Неверный логин или пароль";
+    }
+  } catch (e) {
+    document.getElementById("loginError").textContent = "Ошибка соединения с сервером";
+  }
+});
+
 // ========== Функции для тумблера авто-клика ==========
 document.getElementById("autoClickToggle").addEventListener("change", function(e) {
   if (e.target.checked) {
@@ -389,10 +442,7 @@ document.getElementById("autoClickToggle").addEventListener("change", function(e
 });
 
 function startAutoClick() {
-  // Кликаем сразу при включении
   clickTodayButton();
-  
-  // Затем каждые 15 секунд
   autoClickInterval = setInterval(clickTodayButton, 15000);
 }
 
@@ -405,11 +455,11 @@ function stopAutoClick() {
 
 function clickTodayButton() {
   const selector = 'a#timeFrame_today.newBtn.toggleButton.LightGray';
-  
-  chrome.tabs.query({url: "https://ru.investing.com/*"}, (tabs) => {
+
+  chrome.tabs.query({ url: "https://ru.investing.com/*" }, (tabs) => {
     if (tabs.length > 0) {
       chrome.scripting.executeScript({
-        target: {tabId: tabs[0].id},
+        target: { tabId: tabs[0].id },
         func: (sel) => {
           const element = document.querySelector(sel);
           if (element) {

@@ -186,51 +186,98 @@
     #sellButton:hover {
       background-color: #d32f2f;
     }
+
+    #loginSection {
+      margin-top: 20px;
+    }
+
+    #loginSection input {
+      width: calc(50% - 10px);
+      padding: 10px;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+
+    #loginButton {
+      width: 100%;
+      padding: 10px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    #loginButton:hover {
+      background-color: #0056b3;
+    }
+
+    #loginError {
+      margin-top: 10px;
+      font-size: 14px;
+      color: red;
+      text-align: center;
+    }
+
+    #mainSection {
+      display: none;
+    }
   </style>
 </head>
 <body>
 
-  <div class="header"></div>
-
-  <div class="trade-buttons">
-    <button id="buyButton" class="trade-button">Купить</button>
-    <button id="sellButton" class="trade-button">Продать</button>
+  <div id="loginSection">
+    <input type="text" id="loginInput" placeholder="Логин" />
+    <input type="password" id="passwordInput" placeholder="Пароль" />
+    <button id="loginButton">Войти</button>
+    <div id="loginError" style="color:red;"></div>
   </div>
 
-  <div id="controls-row">
-    <div class="select-wrapper">
-      <select id="assetSelect">
-        <option value="">Актив</option>
-      </select>
+  <div id="mainSection" style="display:none;">
+    <div class="trade-buttons">
+      <button id="buyButton" class="trade-button">Купить</button>
+      <button id="sellButton" class="trade-button">Продать</button>
     </div>
-    <div class="select-wrapper">
-      <select id="pairSelect" disabled>
-        <option value="">Валютная пара</option>
-      </select>
-    </div>
-    <div class="toggle-wrapper">
-      <label class="toggle-switch">
-        <input type="checkbox" id="autoClickToggle">
-        <span class="toggle-slider"></span>
-      </label>
-    </div>
-  </div>
 
-  <div id="newsContainer">
-    <!-- Пример структуры новостей -->
-    <div class="news-item">
-      <div>Время: 04:00</div>
-      <div>Актив: CNY</div>
-      <div>Новость: Базовая кредитная ставка НБК (май)</div>
-      <div>Важность: <span class="stars">★★★</span></div>
-      <div>Факт: <span class="actual">3,50%</span></div>
-      <div>Прогноз: <span class="forecast">3,00%</span></div>
-      <div>Пред: <span class="previous">3,60%</span></div>
+    <div id="controls-row">
+      <div class="select-wrapper">
+        <select id="assetSelect">
+          <option value="">Актив</option>
+        </select>
+      </div>
+      <div class="select-wrapper">
+        <select id="pairSelect" disabled>
+          <option value="">Валютная пара</option>
+        </select>
+      </div>
+      <div class="toggle-wrapper">
+        <label class="toggle-switch">
+          <input type="checkbox" id="autoClickToggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
     </div>
-  </div>
 
-  <div id="statusBar">Выберите новость для фокуса</div>
+    <div id="newsContainer">
+      <!-- Пример структуры новостей -->
+      <div class="news-item">
+        <div>Время: 04:00</div>
+        <div>Актив: CNY</div>
+        <div>Новость: Базовая кредитная ставка НБК (май)</div>
+        <div>Важность: <span class="stars">★★★</span></div>
+        <div>Факт: <span class="actual">3,50%</span></div>
+        <div>Прогноз: <span class="forecast">3,00%</span></div>
+        <div>Пред: <span class="previous">3,60%</span></div>
+      </div>
+    </div>
+
+    <div id="statusBar">Выберите новость для фокуса</div>
+  </div>
 
   <script src="popup.js"></script>
 </body>
-</html>
+</html>>
