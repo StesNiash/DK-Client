@@ -377,7 +377,7 @@ function populatePairSelect(asset) {
   }
 }
 
-const SERVER_URL = "https://your-server.com/api/login"; // Замените на ваш адрес
+const SERVER_URL = "https://176.108.253.203/login"; // Замените на ваш адрес
 
 function showLogin() {
   document.getElementById("loginSection").style.display = "";
