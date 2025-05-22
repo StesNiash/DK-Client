@@ -412,7 +412,7 @@ document.getElementById("loginButton")?.addEventListener("click", async () => {
 
   try {
     const res = await fetch(SERVER_URL, {
-      method: "POST",
+      method: "GET",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ login, password })
     });
