@@ -377,7 +377,7 @@ function populatePairSelect(asset) {
   }
 }
 
-const SERVER_URL = "http://176.108.253.203:8000/user/"; // Замените на ваш адрес
+const SERVER_URL = "http://176.108.253.203:8000/login"; // Замените на ваш адрес
 
 function showLogin() {
   document.getElementById("loginSection").style.display = "";
@@ -412,7 +412,7 @@ document.getElementById("loginButton")?.addEventListener("click", async () => {
 
   try {
     const res = await fetch(SERVER_URL, {
-      method: "GET",
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ login, password })
     });
