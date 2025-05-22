@@ -1,4 +1,3 @@
-<!-- popup.html -->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -13,14 +12,27 @@
       color: #333;
     }
 
-    #controls {
-      margin-bottom: 14px;
+    .header {
       display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    #controls-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
       gap: 10px;
     }
 
-    select {
+    .select-wrapper {
       flex: 1;
+    }
+
+    select {
+      width: 100%;
       padding: 6px 10px;
       border: 1px solid #ccc;
       border-radius: 8px;
@@ -29,14 +41,60 @@
       box-shadow: 0 1px 2px rgba(0,0,0,0.05);
       height: 36px;
       text-align: center;
-      line-height: 24px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
       -webkit-appearance: none;
       -moz-appearance: none;
       appearance: none;
       cursor: pointer;
+    }
+
+    .toggle-wrapper {
+      width: 50px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 50px;
+      height: 24px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #f44336;
+      transition: .4s;
+      border-radius: 24px;
+    }
+
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+
+    input:checked + .toggle-slider {
+      background-color: #4CAF50;
+    }
+
+    input:checked + .toggle-slider:before {
+      transform: translateX(26px);
     }
 
     #newsContainer {
@@ -72,14 +130,13 @@
       box-shadow: 0 0 6px rgba(0, 123, 255, 0.5);
     }
 
-    .label {
-      font-weight: 600;
-      color: #555;
+    .stars {
+      color: #FFD700;
+      font-size: 14px;
     }
 
-    .stars {
-      color: #f39c12;
-      font-size: 14px;
+    .actual, .forecast, .previous {
+      font-weight: 700;
     }
 
     #statusBar {
@@ -89,10 +146,6 @@
       cursor: pointer;
       text-align: center;
       font-size: 14px;
-    }
-
-    .actual, .forecast, .previous {
-      font-weight: 600;
     }
 
     .trade-buttons {
@@ -109,6 +162,11 @@
       font-weight: bold;
       cursor: pointer;
       transition: background-color 0.2s;
+      opacity: 0;
+      pointer-events: none;
+      height: 0;
+      padding: 0;
+      margin: 0;
     }
 
     #buyButton {
@@ -171,31 +229,55 @@
   </style>
 </head>
 <body>
+
   <div id="loginSection">
     <input type="text" id="loginInput" placeholder="Логин" />
     <input type="password" id="passwordInput" placeholder="Пароль" />
     <button id="loginButton">Войти</button>
     <div id="loginError" style="color:red;"></div>
   </div>
+
   <div id="mainSection" style="display:none;">
     <div class="trade-buttons">
       <button id="buyButton" class="trade-button">Купить</button>
       <button id="sellButton" class="trade-button">Продать</button>
     </div>
 
-    <div id="controls">
-      <select id="assetSelect">
-        <option value="">Выбор актива</option>
-      </select>
-      <select id="pairSelect" disabled>
-        <option value="">Выбор валютной пары</option>
-      </select>
+    <div id="controls-row">
+      <div class="select-wrapper">
+        <select id="assetSelect">
+          <option value="">Актив</option>
+        </select>
+      </div>
+      <div class="select-wrapper">
+        <select id="pairSelect" disabled>
+          <option value="">Валютная пара</option>
+        </select>
+      </div>
+      <div class="toggle-wrapper">
+        <label class="toggle-switch">
+          <input type="checkbox" id="autoClickToggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
     </div>
 
-    <div id="newsContainer">Загрузка новостей...</div>
+    <div id="newsContainer">
+      <!-- Пример структуры новостей -->
+      <div class="news-item">
+        <div>Время: 04:00</div>
+        <div>Актив: CNY</div>
+        <div>Новость: Базовая кредитная ставка НБК (май)</div>
+        <div>Важность: <span class="stars">★★★</span></div>
+        <div>Факт: <span class="actual">3,50%</span></div>
+        <div>Прогноз: <span class="forecast">3,00%</span></div>
+        <div>Пред: <span class="previous">3,60%</span></div>
+      </div>
+    </div>
+
     <div id="statusBar">Выберите новость для фокуса</div>
   </div>
 
   <script src="popup.js"></script>
 </body>
-</html>
+</html>>
