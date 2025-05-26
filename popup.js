@@ -377,7 +377,8 @@ function populatePairSelect(asset) {
   }
 }
 
-const SERVER_URL = "http://176.108.253.203:8000/login"; // Замените на ваш адрес
+const SERVER_URL = "http://176.108.253.203:8000/login";
+const VERIFY_URL = "http://176.108.253.203:8000/verify";
 
 function showLogin() {
   document.getElementById("loginSection").style.display = "";
@@ -389,15 +390,63 @@ function showMain() {
   document.getElementById("mainSection").style.display = "";
 }
 
-// Проверка токена при запуске
-chrome.storage.local.get("authToken", (result) => {
+// Функция для выхода из системы
+function logout() {
+  chrome.storage.local.remove(["authToken"], () => {
+    showLogin();
+    document.getElementById("loginError").textContent = "Подписка истекла. Войдите снова.";
+  });
+}
+
+// Функция проверки статуса подписки
+async function verifySubscription(token) {
+  try {
+    const response = await fetch(VERIFY_URL, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({ token })
+    });
+    
+    const data = await response.json();
+    
+    if (!data.success || !data.subscriptionActive) {
+      console.log("Подписка неактивна или истекла");
+      logout();
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Ошибка при проверке подписки:", error);
+    // В случае ошибки сети не разлогиниваем пользователя
+    return true;
+  }
+}
+
+// Проверка токена и подписки при запуске
+chrome.storage.local.get("authToken", async (result) => {
   if (result.authToken) {
-    // Можно добавить проверку токена на сервере
-    showMain();
+    const isValid = await verifySubscription(result.authToken);
+    if (isValid) {
+      showMain();
+    }
+    // Если подписка неактивна, logout() уже вызван в verifySubscription
   } else {
     showLogin();
   }
 });
+
+// Периодическая проверка подписки каждые 5 минут
+setInterval(async () => {
+  chrome.storage.local.get("authToken", async (result) => {
+    if (result.authToken) {
+      await verifySubscription(result.authToken);
+    }
+  });
+}, 5 * 60 * 1000); // 5 минут
 
 // Обработчик кнопки входа
 document.getElementById("loginButton")?.addEventListener("click", async () => {
