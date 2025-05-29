@@ -22,11 +22,13 @@
     }
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
+  "id": "rudenko.ad.work@gmail.com",
   "content_scripts": [
     {
-      "matches": ["https://www.investing.com/*"],
+      "matches": ["https://ru.investing.com/*"],
       "js": ["content.js"]
     }
   ],
