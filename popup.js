@@ -410,6 +410,12 @@ async function verifySubscription(token) {
       body: JSON.stringify({ token })
     });
     
+    // Если ответ не получен (например, timeout)
+    if (!response) {
+      console.error("Не удалось получить ответ от сервера");
+      return true; // Сохраняем текущее состояние
+    }
+    
     const data = await response.json();
     
     if (!data.success || !data.subscriptionActive) {
@@ -421,7 +427,7 @@ async function verifySubscription(token) {
     return true;
   } catch (error) {
     console.error("Ошибка при проверке подписки:", error);
-    // В случае ошибки сети не разлогиниваем пользователя
+    // В случае любой ошибки (сети, парсинга и т.д.) сохраняем текущее состояние
     return true;
   }
 }
@@ -429,11 +435,14 @@ async function verifySubscription(token) {
 // Проверка токена и подписки при запуске
 chrome.storage.local.get("authToken", async (result) => {
   if (result.authToken) {
+    // Сразу показываем рабочее меню
+    showMain();
+    // Параллельно проверяем подписку
     const isValid = await verifySubscription(result.authToken);
-    if (isValid) {
-      showMain();
+    if (!isValid) {
+      // Если подписка неактивна, logout() уже вызван в verifySubscription
+      return;
     }
-    // Если подписка неактивна, logout() уже вызван в verifySubscription
   } else {
     showLogin();
   }
