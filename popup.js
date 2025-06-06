@@ -5,6 +5,7 @@ let selectedPair = "";
 let lastProcessedFact = null;
 let processedNews = {}; // Для отслеживания обработанных новостей
 let initialNewsStates = {}; // Для хранения начального состояния новостей
+let autoClickInterval = null; // Для хранения интервала авто-кликов
 
 const TRADING_RULES = {
   "AUD": {
@@ -65,7 +66,7 @@ for (const asset in TRADING_RULES) {
   }
 }
 
-// Функция для клика по элементам (без изменений)
+// Функция для клика по элементам
 function clickElement(selector) {
   return new Promise((resolve) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -106,6 +107,49 @@ function clickElement(selector) {
   });
 }
 
+// Новая функция для выбора валютной пары на странице
+async function selectCurrencyPairOnPage(pair) {
+  if (!pair) return false;
+  
+  // 1. Кликаем по основному селектору, чтобы открыть список пар
+  const mainSelectorClicked = await clickElement('a.pair-number-wrap');
+  if (!mainSelectorClicked) {
+    console.error("Не удалось найти основной селектор валютных пар");
+    return false;
+  }
+  
+  // 2. Ждем немного для открытия списка
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  // 3. Ищем нужную пару в списке и кликаем по ней
+  const pairElements = await new Promise(resolve => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      chrome.scripting.executeScript({
+        target: { tabId: tabs[0].id },
+        func: (pairToFind) => {
+          const elements = Array.from(document.querySelectorAll('span.alist__label'));
+          const targetElement = elements.find(el => el.textContent.trim() === pairToFind);
+          if (targetElement) {
+            targetElement.click();
+            return true;
+          }
+          return false;
+        },
+        args: [pair]
+      }, (results) => {
+        if (chrome.runtime.lastError) {
+          console.error("Error executing script:", chrome.runtime.lastError);
+          resolve(false);
+        } else {
+          resolve(results && results[0] && results[0].result);
+        }
+      });
+    });
+  });
+  
+  return pairElements;
+}
+
 // Проверяем, была ли новость уже обработана
 function isNewsProcessed(newsItem) {
   if (!newsItem) return true;
@@ -138,7 +182,7 @@ function hadFactInitially(newsItem) {
   return initialNewsStates[key]?.hasFact || false;
 }
 
-// Обработчики для кнопок Купить/Продать (без изменений)
+// Обработчики для кнопок Купить/Продать
 document.getElementById("buyButton")?.addEventListener("click", async () => {
   const result = await clickElement(".action-high-low.button-call-wrap a.btn.btn-call");
   if (result) {
@@ -244,7 +288,6 @@ function processNewsData(newsData) {
   }
 }
 
-// Остальные функции остаются без изменений
 function renderNews(newsList) {
   const container = document.getElementById("newsContainer");
   container.innerHTML = "";
@@ -362,7 +405,7 @@ function populateAssetSelect() {
 
 function populatePairSelect(asset) {
   const pairSelect = document.getElementById("pairSelect");
-  pairSelect.innerHTML = '<option value="">Выбор валютной пары</option>';
+  pairSelect.innerHTML = '<option value="">Валютная пара</option>';
 
   if (PAIRS[asset]) {
     pairSelect.disabled = false;
@@ -377,6 +420,171 @@ function populatePairSelect(asset) {
   }
 }
 
+const SERVER_URL = "http://176.108.253.203:8000/login";
+const VERIFY_URL = "http://176.108.253.203:8000/verify";
+
+function showLogin() {
+  document.getElementById("loginSection").style.display = "";
+  document.getElementById("mainSection").style.display = "none";
+}
+
+function showMain() {
+  document.getElementById("loginSection").style.display = "none";
+  document.getElementById("mainSection").style.display = "";
+}
+
+// Функция для выхода из системы
+function logout() {
+  chrome.storage.local.remove(["authToken"], () => {
+    showLogin();
+    document.getElementById("loginError").textContent = "Подписка истекла. Войдите снова.";
+  });
+}
+
+// Функция проверки статуса подписки
+async function verifySubscription(token) {
+  try {
+    const response = await fetch(VERIFY_URL, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({ token })
+    });
+    
+    // Если ответ не получен (например, timeout)
+    if (!response) {
+      console.error("Не удалось получить ответ от сервера");
+      return true; // Сохраняем текущее состояние
+    }
+    
+    const data = await response.json();
+    
+    if (!data.success || !data.subscriptionActive) {
+      console.log("Подписка неактивна или истекла");
+      logout();
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Ошибка при проверке подписки:", error);
+    // В случае любой ошибки (сети, парсинга и т.д.) сохраняем текущее состояние
+    return true;
+  }
+}
+
+// Проверка токена и подписки при запуске
+chrome.storage.local.get("authToken", async (result) => {
+  if (result.authToken) {
+    // Сразу показываем рабочее меню
+    showMain();
+    // Параллельно проверяем подписку
+    const isValid = await verifySubscription(result.authToken);
+    if (!isValid) {
+      // Если подписка неактивна, logout() уже вызван в verifySubscription
+      return;
+    }
+  } else {
+    showLogin();
+  }
+});
+
+// Периодическая проверка подписки каждые 5 минут
+setInterval(async () => {
+  chrome.storage.local.get("authToken", async (result) => {
+    if (result.authToken) {
+      await verifySubscription(result.authToken);
+    }
+  });
+}, 5 * 60 * 1000); // 5 минут
+
+// Обработчик кнопки входа
+document.getElementById("loginButton")?.addEventListener("click", async () => {
+  const login = document.getElementById("loginInput").value.trim();
+  const password = document.getElementById("passwordInput").value.trim();
+  document.getElementById("loginError").textContent = "";
+
+  if (!login || !password) {
+    document.getElementById("loginError").textContent = "Введите логин и пароль";
+    return;
+  }
+
+  try {
+    const res = await fetch(SERVER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ login, password })
+    });
+    const data = await res.json();
+    if (data.success && data.token) {
+      chrome.storage.local.set({ authToken: data.token }, () => {
+        showMain();
+        location.reload(); // Перезагрузить для инициализации расширения
+      });
+    } else {
+      document.getElementById("loginError").textContent = "Неверный логин или пароль";
+    }
+  } catch (e) {
+    document.getElementById("loginError").textContent = "Ошибка соединения с сервером";
+  }
+});
+
+// ========== Функции для тумблера авто-клика ==========
+document.getElementById("autoClickToggle").addEventListener("change", function(e) {
+  if (e.target.checked) {
+    startAutoClick();
+    document.getElementById("statusBar").textContent = "Автообновление включено";
+  } else {
+    stopAutoClick();
+    document.getElementById("statusBar").textContent = "Автообновление выключено";
+  }
+});
+
+function startAutoClick() {
+  clickTodayButton();
+  autoClickInterval = setInterval(clickTodayButton, 15000);
+}
+
+function stopAutoClick() {
+  if (autoClickInterval) {
+    clearInterval(autoClickInterval);
+    autoClickInterval = null;
+  }
+}
+
+function clickTodayButton() {
+  const selector = 'a#timeFrame_today.newBtn.toggleButton.LightGray';
+
+  chrome.tabs.query({ url: "https://ru.investing.com/*" }, (tabs) => {
+    if (tabs.length > 0) {
+      chrome.scripting.executeScript({
+        target: { tabId: tabs[0].id },
+        func: (sel) => {
+          const element = document.querySelector(sel);
+          if (element) {
+            element.click();
+            console.log("Клик по кнопке 'Сегодня' выполнен");
+            return true;
+          }
+          return false;
+        },
+        args: [selector]
+      }, (results) => {
+        if (chrome.runtime.lastError) {
+          console.error("Ошибка при клике:", chrome.runtime.lastError);
+        }
+      });
+    }
+  });
+}
+
+// Остановить интервал при закрытии попапа
+window.addEventListener('unload', () => {
+  stopAutoClick();
+});
+
 // Инициализация
 document.getElementById("assetSelect")?.addEventListener("change", (e) => {
   selectedAsset = e.target.value;
@@ -385,9 +593,14 @@ document.getElementById("assetSelect")?.addEventListener("change", (e) => {
   chrome.storage.local.set({ selectedAsset, selectedPair });
 });
 
-document.getElementById("pairSelect")?.addEventListener("change", (e) => {
+document.getElementById("pairSelect")?.addEventListener("change", async (e) => {
   selectedPair = e.target.value;
   chrome.storage.local.set({ selectedPair });
+  
+  // Вызываем функцию для выбора пары на странице
+  if (selectedPair) {
+    await selectCurrencyPairOnPage(selectedPair);
+  }
 });
 
 // Загрузка сохраненных данных
