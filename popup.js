@@ -107,6 +107,49 @@ function clickElement(selector) {
   });
 }
 
+// Новая функция для выбора валютной пары на странице
+async function selectCurrencyPairOnPage(pair) {
+  if (!pair) return false;
+  
+  // 1. Кликаем по основному селектору, чтобы открыть список пар
+  const mainSelectorClicked = await clickElement('a.pair-number-wrap');
+  if (!mainSelectorClicked) {
+    console.error("Не удалось найти основной селектор валютных пар");
+    return false;
+  }
+  
+  // 2. Ждем немного для открытия списка
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  // 3. Ищем нужную пару в списке и кликаем по ней
+  const pairElements = await new Promise(resolve => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      chrome.scripting.executeScript({
+        target: { tabId: tabs[0].id },
+        func: (pairToFind) => {
+          const elements = Array.from(document.querySelectorAll('span.alist__label'));
+          const targetElement = elements.find(el => el.textContent.trim() === pairToFind);
+          if (targetElement) {
+            targetElement.click();
+            return true;
+          }
+          return false;
+        },
+        args: [pair]
+      }, (results) => {
+        if (chrome.runtime.lastError) {
+          console.error("Error executing script:", chrome.runtime.lastError);
+          resolve(false);
+        } else {
+          resolve(results && results[0] && results[0].result);
+        }
+      });
+    });
+  });
+  
+  return pairElements;
+}
+
 // Проверяем, была ли новость уже обработана
 function isNewsProcessed(newsItem) {
   if (!newsItem) return true;
@@ -550,9 +593,14 @@ document.getElementById("assetSelect")?.addEventListener("change", (e) => {
   chrome.storage.local.set({ selectedAsset, selectedPair });
 });
 
-document.getElementById("pairSelect")?.addEventListener("change", (e) => {
+document.getElementById("pairSelect")?.addEventListener("change", async (e) => {
   selectedPair = e.target.value;
   chrome.storage.local.set({ selectedPair });
+  
+  // Вызываем функцию для выбора пары на странице
+  if (selectedPair) {
+    await selectCurrencyPairOnPage(selectedPair);
+  }
 });
 
 // Загрузка сохраненных данных
