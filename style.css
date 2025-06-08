@@ -1,3 +1,7 @@
+:root {
+  --dk-watermark-opacity: 0.5;
+}
+
 body {
   font-family: 'Segoe UI', Tahoma, sans-serif;
   background: #f4f6f9;

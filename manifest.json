@@ -12,6 +12,10 @@
   "host_permissions": [
     "https://ru.investing.com/*"
   ],
+  "web_accessible_resources": [{
+    "resources": ["icons/watermark_small.png"],
+    "matches": ["<all_urls>"]
+  }],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -31,7 +35,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://ru.investing.com/*"],
+      "matches": ["<all_urls>"],
       "js": ["content.js"]
     }
   ],
