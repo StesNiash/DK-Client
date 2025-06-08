@@ -1,20 +1,22 @@
 // content.js
+console.log('[DK] Content script загружен');
+console.log('[DK] Document body:', document.body ? 'найден' : 'не найден');
 
 // Функция для вставки водяного знака
 function insertWatermark() {
-  console.log('[DK] Поиск элемента .zoom-controls...');
-  const target = document.querySelector('.zoom-controls');
+  // Проверяем, не добавлен ли уже знак
+  if (document.querySelector('#dk-watermark')) return;
+
+  console.log('[DK] Поиск элемента .chart-item.is-quick...');
+  const target = document.querySelector('.chart-item.is-quick');
   
   if (!target) {
-    console.log('[DK] Элемент .zoom-controls не найден');
+    console.log('[DK] Элемент .chart-item.is-quick не найден');
     return;
   }
   
-  console.log('[DK] Элемент .zoom-controls найден');
-  
-  // Проверяем, не добавлен ли уже знак
-  if (target.querySelector('#dk-watermark')) return;
-  
+  console.log('[DK] Элемент .chart-item.is-quick найден');
+
   const watermark = document.createElement('img');
   watermark.id = 'dk-watermark';
   
@@ -36,13 +38,13 @@ function insertWatermark() {
     });
   watermark.style.cssText = `
     position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
+    bottom: 10px;
+    right: 10px;
     opacity: var(--dk-watermark-opacity, 0.2);
     pointer-events: none;
     z-index: 9999;
-    max-width: 80%;
-    max-height: 80%;
+    max-width: 160px;
+    max-height: 80px;
   `;
   
   target.prepend(watermark);
