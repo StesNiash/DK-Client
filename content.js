@@ -9,6 +9,7 @@ let watermarkAdded = false;
 let beautifyInvestingProcessed = false;
 let adRemoved = false;
 let elementsRemoved = false;
+let UserAppData = undefined;
 
 // Оптимизированный observer
 const observer = new MutationObserver(() => {
@@ -188,8 +189,43 @@ function isBrokerSite() {
   return false;
 }
 
+// Функция для извлечения bid из элемента <div>
+function getBID() {
+    // Поиск элемента <div> с классом info__id, ребёнок которого содержит атрибут data-hd-show
+    // Используем querySelector для упрощения поиска
+    const divElement = document.querySelector('.info__id');
+    
+    if (divElement) {
+        const childWithDataHdShow = Array.from(divElement.children).find(child => child.hasAttribute('data-hd-show'));
+        // Если нашли нужный элемент, получаем значение атрибута data-hd-show
+        if (childWithDataHdShow) {
+            const bid = childWithDataHdShow.getAttribute('data-hd-show');
+            // Если bid содержит строку 'id ', удаляем её
+            const bidValue = bid ? bid.replace('id ', '') : null;
+
+        console.log('BID:', bidValue);
+        return bidValue;
+    } else {
+        console.error('Элемент <div> не найден.');
+    }
+}}
+
 // Основная инициализация
-if (isBrokerSite()) {
+  if (isBrokerSite()) {
+  // Сохраняем BID при загрузке страницы
+  const handleLoad = () => {
+    const bid = getBID();
+    if (bid) {
+      chrome.storage.local.set({ USER_BID: bid });
+    }
+  };
+  
+  if (document.readyState === 'complete') {
+    handleLoad();
+  } else {
+    window.addEventListener('load', handleLoad);
+  }
+
   // Упрощенное ожидание целевого элемента
   const elementObserver = new MutationObserver(() => {
     const target = document.querySelector('.chart-item.is-quick');
@@ -227,6 +263,8 @@ if (isBrokerSite()) {
   }
 } else {
   console.log('[DK] Сайт не является брокером, функционал не запущен');
+  // Очищаем BID для не-брокерских сайтов
+  chrome.storage.local.remove("USER_BID");
 }
 
 // Существующий функционал для investing.com

@@ -435,7 +435,7 @@ function showMain() {
 
 // Функция для выхода из системы
 function logout() {
-  chrome.storage.local.remove(["authToken"], () => {
+  chrome.storage.local.remove(["authToken", "expected_bid"], () => {
     showLogin();
     document.getElementById("loginError").textContent = "Подписка истекла. Войдите снова.";
   });
@@ -463,6 +463,22 @@ async function verifySubscription(token) {
     
     if (!data.success || !data.subscriptionActive) {
       console.log("Подписка неактивна или истекла");
+      logout();
+      return false;
+    }
+    
+    // Проверка BID (Broker ID)
+    const { USER_BID: currentBID } = await chrome.storage.local.get("USER_BID");
+    const { expected_bid } = await chrome.storage.local.get("expected_bid");
+    
+    if (!currentBID) {
+      document.getElementById("statusBar").textContent = "BID не получен! Откройте страницу брокера.";
+      return false;
+    }
+    
+    if (expected_bid && expected_bid !== currentBID) {
+      console.log("Обнаружена смена пользователя! Выполняем выход.");
+      document.getElementById("statusBar").textContent = "Обнаружена смена пользователя! Выполняется выход...";
       logout();
       return false;
     }
@@ -505,6 +521,14 @@ document.getElementById("loginButton")?.addEventListener("click", async () => {
   const login = document.getElementById("loginInput").value.trim();
   const password = document.getElementById("passwordInput").value.trim();
   document.getElementById("loginError").textContent = "";
+  
+  // Проверка наличия BID (Broker ID)
+  const { USER_BID } = await chrome.storage.local.get("USER_BID");
+  if (!USER_BID) {
+    document.getElementById("loginError").textContent = 
+      "Откройте страницу брокера для получения BID!";
+    return;
+  }
 
   if (!login || !password) {
     document.getElementById("loginError").textContent = "Введите логин и пароль";
@@ -515,13 +539,44 @@ document.getElementById("loginButton")?.addEventListener("click", async () => {
     const res = await fetch(SERVER_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ login, password })
+      body: JSON.stringify({ 
+        login, 
+        password,
+        bid: USER_BID  // Отправляем BID на сервер
+      })
     });
     const data = await res.json();
     if (data.success && data.token) {
-      chrome.storage.local.set({ authToken: data.token }, () => {
+      // Сохраняем BID как ожидаемый для будущих проверок
+      chrome.storage.local.set({ 
+        authToken: data.token,
+        expected_bid: USER_BID
+      }, () => {
         showMain();
-        location.reload(); // Перезагрузить для инициализации расширения
+        // Инициализация без перезагрузки
+        populateAssetSelect();
+        updateExtension();
+        chrome.storage.local.get(
+          ["newsData", "selectedNews", "selectedAsset", "selectedPair", "processedNews"], 
+          (result) => {
+            if (result.processedNews) {
+              processedNews = result.processedNews;
+            }
+            if (result.newsData) renderNews(result.newsData);
+            if (result.selectedNews) selectedNews = result.selectedNews;
+
+            if (result.selectedAsset) {
+              selectedAsset = result.selectedAsset;
+              document.getElementById("assetSelect").value = selectedAsset;
+              populatePairSelect(selectedAsset);
+            }
+
+            if (result.selectedPair) {
+              selectedPair = result.selectedPair;
+              document.getElementById("pairSelect").value = selectedPair;
+            }
+          }
+        );
       });
     } else {
       document.getElementById("loginError").textContent = "Неверный логин или пароль";
