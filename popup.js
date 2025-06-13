@@ -433,11 +433,11 @@ function showMain() {
   document.getElementById("mainSection").style.display = "";
 }
 
-// Функция для выхода из системы
-function logout() {
+// Функция для выхода из системы с указанием причины
+function logout(reason = "Подписка истекла") {
   chrome.storage.local.remove(["authToken", "expected_bid"], () => {
     showLogin();
-    document.getElementById("loginError").textContent = "Подписка истекла. Войдите снова.";
+    document.getElementById("loginError").textContent = `${reason}. Войдите снова.`;
   });
 }
 
@@ -450,7 +450,10 @@ async function verifySubscription(token) {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`
       },
-      body: JSON.stringify({ token })
+      body: JSON.stringify({
+        token,
+        bid: USER_BID 
+       })
     });
     
     // Если ответ не получен (например, timeout)
@@ -458,12 +461,13 @@ async function verifySubscription(token) {
       console.error("Не удалось получить ответ от сервера");
       return true; // Сохраняем текущее состояние
     }
-    
+    console.log("Проверка, ответ:", response.message);
     const data = await response.json();
     
     if (!data.success || !data.subscriptionActive) {
-      console.log("Подписка неактивна или истекла");
-      logout();
+      const reason = data.message || "Подписка неактивна или истекла";
+      console.log(reason);
+      logout(reason);
       return false;
     }
     
@@ -473,13 +477,14 @@ async function verifySubscription(token) {
     
     if (!currentBID) {
       document.getElementById("statusBar").textContent = "BID не получен! Откройте страницу брокера.";
-      return false;
+      return true; // Не выходим, только предупреждение
     }
     
     if (expected_bid && expected_bid !== currentBID) {
-      console.log("Обнаружена смена пользователя! Выполняем выход.");
-      document.getElementById("statusBar").textContent = "Обнаружена смена пользователя! Выполняется выход...";
-      logout();
+      const reason = "Обнаружена смена пользователя";
+      console.log(`${reason}! Выполняем выход.`);
+      document.getElementById("statusBar").textContent = `${reason}! Выполняется выход...`;
+      logout(reason);
       return false;
     }
     
