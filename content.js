@@ -211,19 +211,24 @@ function getBID() {
 }}
 
 // Основная инициализация
-  if (isBrokerSite()) {
-  // Сохраняем BID при загрузке страницы
-  const handleLoad = () => {
+if (isBrokerSite()) {
+  const storeBID = () => {
     const bid = getBID();
     if (bid) {
       chrome.storage.local.set({ USER_BID: bid });
+      bidObserver.disconnect();
     }
   };
-  
-  if (document.readyState === 'complete') {
-    handleLoad();
-  } else {
-    window.addEventListener('load', handleLoad);
+
+  const bidObserver = new MutationObserver(storeBID);
+
+  if (document.body) {
+    bidObserver.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+
+    storeBID(); // пробуем сразу
   }
 
   // Упрощенное ожидание целевого элемента
