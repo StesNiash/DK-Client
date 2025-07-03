@@ -1,2 +1,2 @@
 # DK-Client
-DK opera extention for users
+DK NEWS CLIENT extention for users

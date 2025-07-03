@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "DK NEWS HUNTERS",
-  "version": "1.41",
-  "description": "Расширение для анализа экономических новостей. (FIREFOX)",
+  "version": "1.43",
+  "description": "Расширение для анализа экономических новостей. (CHROME)",
   "permissions": [
     "tabs",
     "scripting",
@@ -27,11 +27,10 @@
     }
   },
   "background": {
-    "scripts": ["background.js"]
+    "service_worker": "background.js"
   },
   "browser_specific_settings": {
     "gecko": {
-      "strict_min_version": "109.0",
       "id": "rudenko.ad.work@gmail.com"
     }
   },
