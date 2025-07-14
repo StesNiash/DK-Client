@@ -342,10 +342,14 @@ function renderNews(newsList) {
 
     div.addEventListener("click", () => {
       selectedNews = { event: item.event, currency: item.currency };
+      selectedAsset = item.currency; // Устанавливаем актив из выбранной новости
       document.getElementById("statusBar").textContent = `Фокусируем: ${item.event}`;
       document.querySelectorAll(".news-item").forEach(el => el.classList.remove("focused"));
       div.classList.add("focused");
-      chrome.storage.local.set({ selectedNews });
+      chrome.storage.local.set({ selectedNews, selectedAsset });
+      
+      // Обновляем список пар для выбранного актива
+      populatePairSelect(selectedAsset);
       
       // Сохраняем начальное состояние при фокусировке
       saveInitialNewsState(item);
@@ -389,18 +393,6 @@ function updateExtension() {
       document.getElementById("newsContainer").innerHTML = "Не удалось обновить данные.";
     }
   });
-}
-
-function populateAssetSelect() {
-  const assetSelect = document.getElementById("assetSelect");
-  assetSelect.innerHTML = '<option value="">Выбор актива</option>';
-  
-  for (const asset in PAIRS) {
-    const option = document.createElement("option");
-    option.value = asset;
-    option.textContent = asset;
-    assetSelect.appendChild(option);
-  }
 }
 
 function populatePairSelect(asset) {
@@ -559,7 +551,6 @@ document.getElementById("loginButton")?.addEventListener("click", async () => {
       }, () => {
         showMain();
         // Инициализация без перезагрузки
-        populateAssetSelect();
         updateExtension();
         chrome.storage.local.get(
           ["newsData", "selectedNews", "selectedAsset", "selectedPair", "processedNews"], 
@@ -572,7 +563,6 @@ document.getElementById("loginButton")?.addEventListener("click", async () => {
 
             if (result.selectedAsset) {
               selectedAsset = result.selectedAsset;
-              document.getElementById("assetSelect").value = selectedAsset;
               populatePairSelect(selectedAsset);
             }
 
@@ -646,13 +636,6 @@ window.addEventListener('unload', () => {
 });
 
 // Инициализация
-document.getElementById("assetSelect")?.addEventListener("change", (e) => {
-  selectedAsset = e.target.value;
-  populatePairSelect(selectedAsset);
-  selectedPair = "";
-  chrome.storage.local.set({ selectedAsset, selectedPair });
-});
-
 document.getElementById("pairSelect")?.addEventListener("change", async (e) => {
   selectedPair = e.target.value;
   chrome.storage.local.set({ selectedPair });
@@ -676,7 +659,6 @@ chrome.storage.local.get(
 
     if (result.selectedAsset) {
       selectedAsset = result.selectedAsset;
-      document.getElementById("assetSelect").value = selectedAsset;
       populatePairSelect(selectedAsset);
     }
 
@@ -702,5 +684,4 @@ document.getElementById("statusBar")?.addEventListener("click", () => {
 setInterval(updateExtension, 1000);
 
 // Первоначальная загрузка
-populateAssetSelect();
 updateExtension();
