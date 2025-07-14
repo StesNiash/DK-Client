@@ -55,6 +55,14 @@ const TRADING_RULES = {
     "CHF/JPY": {"green": "buy", "red": "sell"},
     "USD/CHF": {"green": "sell", "red": "buy"},
     "CAD/CHF": {"green": "sell", "red": "buy"}
+  },
+  "CAD": {
+    "GBP/CAD": {"green": "sell", "red": "buy"},
+    "EUR/CAD": {"green": "sell", "red": "buy"},
+    "USD/CAD": {"green": "sell", "red": "buy"},
+    "CAD/CHF": {"green": "buy", "red": "sell"},
+    "AUD/CAD": {"green": "sell", "red": "buy"},
+    "CAD/JPY": {"green": "buy", "red": "sell"}
   }
 };
 
