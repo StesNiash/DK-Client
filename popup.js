@@ -1,78 +1,20 @@
-// popup.js
+// popup.js - UI логика и взаимодействие с background script
 let selectedNews = null;
 let selectedAsset = "";
 let selectedPair = "";
-let lastProcessedFact = null;
 let processedNews = {}; // Для отслеживания обработанных новостей
-let initialNewsStates = {}; // Для хранения начального состояния новостей
-let autoClickInterval = null; // Для хранения интервала авто-кликов
+let tradingSystemActive = false; // Состояние торговой системы
 
-const TRADING_RULES = {
-  "AUD": {
-    "EUR/AUD": {"green": "sell", "red": "buy"},
-    "AUD/USD": {"green": "buy", "red": "sell"},
-    "AUD/CHF": {"green": "buy", "red": "sell"},
-    "AUD/CAD": {"green": "buy", "red": "sell"},
-    "GBP/AUD": {"green": "sell", "red": "buy"},
-    "AUD/JPY": {"green": "buy", "red": "sell"}
-  },
-  "GBP": {
-    "GBP/CAD": {"green": "buy", "red": "sell"},
-    "GBP/USD": {"green": "buy", "red": "sell"},
-    "GBP/CHF": {"green": "buy", "red": "sell"},
-    "GBP/JPY": {"green": "buy", "red": "sell"},
-    "EUR/GBP": {"green": "sell", "red": "buy"},
-    "GBP/AUD": {"green": "buy", "red": "sell"}
-  },
-  "EUR": {
-    "EUR/AUD": {"green": "buy", "red": "sell"},
-    "EUR/USD": {"green": "buy", "red": "sell"},
-    "EUR/JPY": {"green": "buy", "red": "sell"},
-    "EUR/CAD": {"green": "buy", "red": "sell"},
-    "EUR/CHF": {"green": "buy", "red": "sell"},
-    "EUR/GBP": {"green": "buy", "red": "sell"}
-  },
-  "USD": {
-    "EUR/USD": {"green": "sell", "red": "buy"},
-    "AUD/USD": {"green": "sell", "red": "buy"},
-    "USD/CAD": {"green": "buy", "red": "sell"},
-    "GBP/USD": {"green": "sell", "red": "buy"},
-    "USD/JPY": {"green": "buy", "red": "sell"},
-    "USD/CHF": {"green": "buy", "red": "sell"}
-  },
-  "JPY": {
-    "EUR/JPY": {"green": "sell", "red": "buy"},
-    "USD/JPY": {"green": "sell", "red": "buy"},
-    "CHF/JPY": {"green": "sell", "red": "buy"},
-    "GBP/JPY": {"green": "sell", "red": "buy"},
-    "AUD/JPY": {"green": "sell", "red": "buy"},
-    "CAD/JPY": {"green": "sell", "red": "buy"}
-  },
-  "CHF": {
-    "AUD/CHF": {"green": "sell", "red": "buy"},
-    "GBP/CHF": {"green": "sell", "red": "buy"},
-    "EUR/CHF": {"green": "sell", "red": "buy"},
-    "CHF/JPY": {"green": "buy", "red": "sell"},
-    "USD/CHF": {"green": "sell", "red": "buy"},
-    "CAD/CHF": {"green": "sell", "red": "buy"}
-  },
-  "CAD": {
-    "GBP/CAD": {"green": "sell", "red": "buy"},
-    "EUR/CAD": {"green": "sell", "red": "buy"},
-    "USD/CAD": {"green": "sell", "red": "buy"},
-    "CAD/CHF": {"green": "buy", "red": "sell"},
-    "AUD/CAD": {"green": "sell", "red": "buy"},
-    "CAD/JPY": {"green": "buy", "red": "sell"}
-  }
+// Торговые пары для UI
+const PAIRS = {
+  "AUD": ["EUR/AUD", "AUD/USD", "AUD/CHF", "AUD/CAD", "GBP/AUD", "AUD/JPY"],
+  "GBP": ["GBP/CAD", "GBP/USD", "GBP/CHF", "GBP/JPY", "EUR/GBP", "GBP/AUD"],
+  "EUR": ["EUR/AUD", "EUR/USD", "EUR/JPY", "EUR/CAD", "EUR/CHF", "EUR/GBP"],
+  "USD": ["EUR/USD", "AUD/USD", "USD/CAD", "GBP/USD", "USD/JPY", "USD/CHF"],
+  "JPY": ["EUR/JPY", "USD/JPY", "CHF/JPY", "GBP/JPY", "AUD/JPY", "CAD/JPY"],
+  "CHF": ["AUD/CHF", "GBP/CHF", "EUR/CHF", "CHF/JPY", "USD/CHF", "CAD/CHF"],
+  "CAD": ["GBP/CAD", "EUR/CAD", "USD/CAD", "CAD/CHF", "AUD/CAD", "CAD/JPY"]
 };
-
-const PAIRS = {};
-for (const asset in TRADING_RULES) {
-  PAIRS[asset] = {};
-  for (const pair in TRADING_RULES[asset]) {
-    PAIRS[asset][pair] = {};
-  }
-}
 
 // Функция для клика по элементам
 function clickElement(selector) {
@@ -165,31 +107,6 @@ function isNewsProcessed(newsItem) {
   return processedNews[key] || false;
 }
 
-// Помечаем новость как обработанную
-function markNewsAsProcessed(newsItem) {
-  if (!newsItem) return;
-  const key = `${newsItem.event}_${newsItem.currency}_${newsItem.actual}`;
-  processedNews[key] = true;
-  chrome.storage.local.set({ processedNews });
-}
-
-// Сохраняем начальное состояние новости
-function saveInitialNewsState(newsItem) {
-  if (!newsItem) return;
-  const key = `${newsItem.event}_${newsItem.currency}`;
-  initialNewsStates[key] = {
-    hasFact: newsItem.actual && newsItem.actual !== "—",
-    factType: newsItem.actualType
-  };
-}
-
-// Проверяем, было ли изначально факта в новости
-function hadFactInitially(newsItem) {
-  if (!newsItem) return true;
-  const key = `${newsItem.event}_${newsItem.currency}`;
-  return initialNewsStates[key]?.hasFact || false;
-}
-
 // Обработчики для кнопок Купить/Продать
 document.getElementById("buyButton")?.addEventListener("click", async () => {
   const result = await clickElement(".action-high-low.button-call-wrap a.btn.btn-call");
@@ -209,93 +126,7 @@ document.getElementById("sellButton")?.addEventListener("click", async () => {
   }
 });
 
-async function executeTrade(action, newsItem) {
-  if (isNewsProcessed(newsItem)) {
-    console.log("Эта новость уже обработана, пропускаем");
-    return false;
-  }
-
-  const selector = action === "buy" 
-    ? ".action-high-low.button-call-wrap a.btn.btn-call" 
-    : ".action-high-low.button-put-wrap a.btn.btn-put";
-  
-  const result = await clickElement(selector);
-  if (result) {
-    console.log(`Выполнена ${action === "buy" ? "покупка" : "продажа"}`);
-    markNewsAsProcessed(newsItem);
-    document.getElementById("statusBar").textContent = 
-      `Авто-торговля: ${action === "buy" ? "Покупка" : "Продажа"} (${selectedAsset}/${selectedPair})`;
-    return true;
-  }
-  return false;
-}
-
-function checkTradingConditions(newsItem) {
-  // Проверяем базовые условия
-  if (!selectedNews || !selectedAsset || !selectedPair || !newsItem.actual || newsItem.actual === "—") {
-    return false;
-  }
-
-  // Проверяем, была ли новость уже обработана
-  if (isNewsProcessed(newsItem)) {
-    return false;
-  }
-
-  // Проверяем, был ли факт изначально
-  if (hadFactInitially(newsItem)) {
-    return false;
-  }
-
-  const factColor = newsItem.actualType;
-  if (factColor !== 'GFP' && factColor !== 'RFP') {
-    return false;
-  }
-
-  const factKey = factColor === 'GFP' ? 'green' : 'red';
-  const tradingPair = TRADING_RULES[selectedAsset]?.[selectedPair];
-  
-  if (!tradingPair || !tradingPair[factKey]) {
-    return false;
-  }
-
-  return tradingPair[factKey];
-}
-
-function processNewsData(newsData) {
-  if (!selectedNews || !newsData || !Array.isArray(newsData)) return;
-
-  const focusedNews = newsData.find(item => 
-    item.event === selectedNews.event && 
-    item.currency === selectedNews.currency
-  );
-
-  if (!focusedNews) {
-    lastProcessedFact = null;
-    return;
-  }
-
-  // Сохраняем начальное состояние при первом обнаружении новости
-  const newsKey = `${focusedNews.event}_${focusedNews.currency}`;
-  if (!initialNewsStates[newsKey]) {
-    saveInitialNewsState(focusedNews);
-  }
-
-  if (!focusedNews.actual || focusedNews.actual === "—") {
-    lastProcessedFact = null;
-    return;
-  }
-
-  const factKey = `${focusedNews.actual}-${focusedNews.actualType}`;
-  if (factKey === lastProcessedFact) return;
-
-  lastProcessedFact = factKey;
-  const tradeAction = checkTradingConditions(focusedNews);
-  
-  if (tradeAction) {
-    executeTrade(tradeAction, focusedNews);
-  }
-}
-
+// Функция для рендеринга новостей
 function renderNews(newsList) {
   const container = document.getElementById("newsContainer");
   container.innerHTML = "";
@@ -304,8 +135,6 @@ function renderNews(newsList) {
     container.textContent = "Нет данных или не удалось загрузить.";
     return;
   }
-
-  processNewsData(newsList);
 
   newsList.forEach(item => {
     const div = document.createElement("div");
@@ -350,7 +179,7 @@ function renderNews(newsList) {
 
     div.addEventListener("click", () => {
       selectedNews = { event: item.event, currency: item.currency };
-      selectedAsset = item.currency; // Устанавливаем актив из выбранной новости
+      selectedAsset = item.currency;
       document.getElementById("statusBar").textContent = `Фокусируем: ${item.event}`;
       document.querySelectorAll(".news-item").forEach(el => el.classList.remove("focused"));
       div.classList.add("focused");
@@ -358,9 +187,6 @@ function renderNews(newsList) {
       
       // Обновляем список пар для выбранного актива
       populatePairSelect(selectedAsset);
-      
-      // Сохраняем начальное состояние при фокусировке
-      saveInitialNewsState(item);
     });
 
     container.appendChild(div);
@@ -391,7 +217,6 @@ function updateExtension() {
       chrome.storage.local.get(["newsData", "processedNews"], (result) => {
         if (result.newsData) {
           renderNews(result.newsData);
-          processNewsData(result.newsData);
         }
         if (result.processedNews) {
           processedNews = result.processedNews;
@@ -409,17 +234,167 @@ function populatePairSelect(asset) {
 
   if (PAIRS[asset]) {
     pairSelect.disabled = false;
-    for (const pair in PAIRS[asset]) {
+    PAIRS[asset].forEach(pair => {
       const option = document.createElement("option");
       option.value = pair;
       option.textContent = pair;
       pairSelect.appendChild(option);
-    }
+    });
   } else {
     pairSelect.disabled = true;
   }
 }
 
+// Функция для проверки связи с background script  
+function testBackgroundConnection() {
+  console.log('[Popup] Тестирование связи с background script');
+  
+  chrome.runtime.sendMessage({ action: "getTradingState" }, (response) => {
+    if (chrome.runtime.lastError) {
+      console.error('[Popup] Ошибка связи с background:', chrome.runtime.lastError);
+      document.getElementById("statusBar").textContent = "❌ Ошибка связи с background script";
+      return;
+    }
+    
+    if (response) {
+      console.log('[Popup] Связь с background успешна:', response);
+      document.getElementById("statusBar").textContent = "✅ Связь с background установлена";
+    } else {
+      console.log('[Popup] Background не отвечает');
+      document.getElementById("statusBar").textContent = "❓ Background не отвечает";
+    }
+  });
+}
+
+// Функция для синхронизации состояния торговой системы
+async function syncTradingSystemState() {
+  console.log('[Popup] Синхронизация состояния торговой системы');
+  
+  chrome.runtime.sendMessage({ action: "getTradingState" }, (response) => {
+    console.log('[Popup] Ответ на getTradingState:', response);
+    
+    if (chrome.runtime.lastError) {
+      console.error('[Popup] Ошибка при получении состояния:', chrome.runtime.lastError);
+      document.getElementById("statusBar").textContent = "Ошибка получения состояния";
+      return;
+    }
+    
+    if (response) {
+      tradingSystemActive = response.isActive;
+      const toggle = document.getElementById("autoClickToggle");
+      if (toggle) {
+        toggle.checked = tradingSystemActive;
+        console.log('[Popup] Переключатель установлен в:', tradingSystemActive);
+      }
+      
+      if (tradingSystemActive) {
+        document.getElementById("statusBar").textContent = "Торговая система активна";
+      } else {
+        document.getElementById("statusBar").textContent = "Торговая система не активна";
+      }
+    } else {
+      console.log('[Popup] Нет ответа от background script');
+      document.getElementById("statusBar").textContent = "Нет связи с торговой системой";
+    }
+  });
+}
+
+// ========== Функции для тумблера торговой системы ==========
+document.getElementById("autoClickToggle").addEventListener("change", function(e) {
+  console.log('[Popup] Переключатель изменен:', e.target.checked);
+  
+  if (e.target.checked) {
+    // Проверяем, что выбрана новость и пара
+    console.log('[Popup] Проверка данных:', { selectedNews, selectedAsset, selectedPair });
+    
+    if (!selectedNews || !selectedAsset || !selectedPair) {
+      e.target.checked = false;
+      document.getElementById("statusBar").textContent = "Выберите новость и валютную пару";
+      console.log('[Popup] Данные не выбраны');
+      return;
+    }
+    
+    console.log('[Popup] Отправка сообщения активации торговой системы');
+    document.getElementById("statusBar").textContent = "Активация торговой системы...";
+    
+    // Активируем торговую систему
+    chrome.runtime.sendMessage({
+      action: "activateTrading",
+      selectedNews: selectedNews,
+      selectedAsset: selectedAsset,
+      selectedPair: selectedPair
+    }, (response) => {
+      console.log('[Popup] Ответ от background:', response);
+      
+      if (chrome.runtime.lastError) {
+        console.error('[Popup] Ошибка runtime:', chrome.runtime.lastError);
+        e.target.checked = false;
+        document.getElementById("statusBar").textContent = "Ошибка соединения с background script";
+        return;
+      }
+      
+      if (response?.success) {
+        tradingSystemActive = true;
+        document.getElementById("statusBar").textContent = "Торговая система активирована";
+        console.log('[Popup] Торговая система успешно активирована');
+      } else {
+        e.target.checked = false;
+        document.getElementById("statusBar").textContent = "Ошибка активации торговой системы";
+        console.error('[Popup] Ошибка активации:', response);
+      }
+    });
+  } else {
+    console.log('[Popup] Деактивация торговой системы');
+    document.getElementById("statusBar").textContent = "Отключение торговой системы...";
+    
+    // Деактивируем торговую систему
+    chrome.runtime.sendMessage({ action: "deactivateTrading" }, (response) => {
+      console.log('[Popup] Ответ на деактивацию:', response);
+      
+      if (chrome.runtime.lastError) {
+        console.error('[Popup] Ошибка runtime при деактивации:', chrome.runtime.lastError);
+      }
+      
+      if (response?.success) {
+        tradingSystemActive = false;
+        document.getElementById("statusBar").textContent = "Торговая система отключена";
+        console.log('[Popup] Торговая система успешно отключена');
+      } else {
+        console.error('[Popup] Ошибка деактивации:', response);
+        document.getElementById("statusBar").textContent = "Ошибка отключения торговой системы";
+      }
+    });
+  }
+});
+
+// Обновление состояния тумблера при открытии popup
+window.addEventListener('load', () => {
+  console.log('[Popup] Popup загружен, инициализация...');
+  
+  // Сначала тестируем связь с background
+  testBackgroundConnection();
+  
+  // Затем синхронизируем состояние
+  setTimeout(() => {
+    syncTradingSystemState();
+  }, 500);
+  
+  // Слушаем изменения в storage для синхронизации состояния
+  chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'local') {
+      if (changes.tradingSystemActive) {
+        const toggle = document.getElementById("autoClickToggle");
+        if (toggle) {
+          toggle.checked = changes.tradingSystemActive.newValue;
+          tradingSystemActive = changes.tradingSystemActive.newValue;
+          console.log('[Popup] Состояние переключателя обновлено из storage:', changes.tradingSystemActive.newValue);
+        }
+      }
+    }
+  });
+});
+
+// Авторизация и сервер
 const SERVER_URL = "http://176.108.253.203:8000/login";
 const VERIFY_URL = "http://176.108.253.203:8000/verify";
 
@@ -444,6 +419,8 @@ function logout(reason = "Подписка истекла") {
 // Функция проверки статуса подписки
 async function verifySubscription(token) {
   try {
+    const { USER_BID } = await chrome.storage.local.get("USER_BID");
+    
     const response = await fetch(VERIFY_URL, {
       method: "POST",
       headers: { 
@@ -461,8 +438,9 @@ async function verifySubscription(token) {
       console.error("Не удалось получить ответ от сервера");
       return true; // Сохраняем текущее состояние
     }
-    console.log("Проверка, ответ:", response.message);
+    
     const data = await response.json();
+    console.log("Проверка, ответ:", data.message);
     
     if (!data.success || !data.subscriptionActive) {
       const reason = data.message || "Подписка неактивна или истекла";
@@ -471,19 +449,26 @@ async function verifySubscription(token) {
       return false;
     }
     
-    // Проверка BID (Broker ID)
-    const { USER_BID: currentBID } = await chrome.storage.local.get("USER_BID");
+    // Проверка BID (Broker ID) - мягкая проверка
     const { expected_bid } = await chrome.storage.local.get("expected_bid");
     
-    if (!currentBID) {
-      document.getElementById("statusBar").textContent = "BID не получен! Откройте страницу брокера.";
+    if (!USER_BID) {
+      console.log("BID не найден, но не разлогиниваем пользователя");
+      // Показываем предупреждение только если на главной странице
+      if (document.getElementById("statusBar") && 
+          document.getElementById("mainSection").style.display !== "none") {
+        document.getElementById("statusBar").textContent = "BID не получен! Откройте страницу брокера.";
+      }
       return true; // Не выходим, только предупреждение
     }
     
-    if (expected_bid && expected_bid !== currentBID) {
+    // Проверяем смену пользователя только если есть оба BID
+    if (expected_bid && USER_BID && expected_bid !== USER_BID) {
       const reason = "Обнаружена смена пользователя";
       console.log(`${reason}! Выполняем выход.`);
-      document.getElementById("statusBar").textContent = `${reason}! Выполняется выход...`;
+      if (document.getElementById("statusBar")) {
+        document.getElementById("statusBar").textContent = `${reason}! Выполняется выход...`;
+      }
       logout(reason);
       return false;
     }
@@ -560,26 +545,8 @@ document.getElementById("loginButton")?.addEventListener("click", async () => {
         showMain();
         // Инициализация без перезагрузки
         updateExtension();
-        chrome.storage.local.get(
-          ["newsData", "selectedNews", "selectedAsset", "selectedPair", "processedNews"], 
-          (result) => {
-            if (result.processedNews) {
-              processedNews = result.processedNews;
-            }
-            if (result.newsData) renderNews(result.newsData);
-            if (result.selectedNews) selectedNews = result.selectedNews;
-
-            if (result.selectedAsset) {
-              selectedAsset = result.selectedAsset;
-              populatePairSelect(selectedAsset);
-            }
-
-            if (result.selectedPair) {
-              selectedPair = result.selectedPair;
-              document.getElementById("pairSelect").value = selectedPair;
-            }
-          }
-        );
+        initializeStoredData();
+        syncTradingSystemState();
       });
     } else {
       document.getElementById("loginError").textContent = "Неверный логин или пароль";
@@ -589,61 +556,35 @@ document.getElementById("loginButton")?.addEventListener("click", async () => {
   }
 });
 
-// ========== Функции для тумблера авто-клика ==========
-document.getElementById("autoClickToggle").addEventListener("change", function(e) {
-  if (e.target.checked) {
-    startAutoClick();
-    document.getElementById("statusBar").textContent = "Автообновление включено";
-  } else {
-    stopAutoClick();
-    document.getElementById("statusBar").textContent = "Автообновление выключено";
-  }
-});
+// Инициализация сохраненных данных
+function initializeStoredData() {
+  chrome.storage.local.get(
+    ["newsData", "selectedNews", "selectedAsset", "selectedPair", "processedNews"], 
+    (result) => {
+      if (result.processedNews) {
+        processedNews = result.processedNews;
+      }
+      
+      if (result.newsData) renderNews(result.newsData);
+      if (result.selectedNews) selectedNews = result.selectedNews;
 
-function startAutoClick() {
-  clickTodayButton();
-  autoClickInterval = setInterval(clickTodayButton, 15000);
-}
+      if (result.selectedAsset) {
+        selectedAsset = result.selectedAsset;
+        populatePairSelect(selectedAsset);
+      }
 
-function stopAutoClick() {
-  if (autoClickInterval) {
-    clearInterval(autoClickInterval);
-    autoClickInterval = null;
-  }
-}
-
-function clickTodayButton() {
-  const selector = 'a#timeFrame_today.newBtn.toggleButton.LightGray';
-
-  chrome.tabs.query({ url: "https://ru.investing.com/*" }, (tabs) => {
-    if (tabs.length > 0) {
-      chrome.scripting.executeScript({
-        target: { tabId: tabs[0].id },
-        func: (sel) => {
-          const element = document.querySelector(sel);
-          if (element) {
-            element.click();
-            console.log("Клик по кнопке 'Сегодня' выполнен");
-            return true;
-          }
-          return false;
-        },
-        args: [selector]
-      }, (results) => {
-        if (chrome.runtime.lastError) {
-          console.error("Ошибка при клике:", chrome.runtime.lastError);
+      if (result.selectedPair) {
+        selectedPair = result.selectedPair;
+        const pairSelect = document.getElementById("pairSelect");
+        if (pairSelect) {
+          pairSelect.value = selectedPair;
         }
-      });
+      }
     }
-  });
+  );
 }
 
-// Остановить интервал при закрытии попапа
-window.addEventListener('unload', () => {
-  stopAutoClick();
-});
-
-// Инициализация
+// Инициализация селектора валютной пары
 document.getElementById("pairSelect")?.addEventListener("change", async (e) => {
   selectedPair = e.target.value;
   chrome.storage.local.set({ selectedPair });
@@ -654,29 +595,7 @@ document.getElementById("pairSelect")?.addEventListener("change", async (e) => {
   }
 });
 
-// Загрузка сохраненных данных
-chrome.storage.local.get(
-  ["newsData", "selectedNews", "selectedAsset", "selectedPair", "processedNews"], 
-  (result) => {
-    if (result.processedNews) {
-      processedNews = result.processedNews;
-    }
-    
-    if (result.newsData) renderNews(result.newsData);
-    if (result.selectedNews) selectedNews = result.selectedNews;
-
-    if (result.selectedAsset) {
-      selectedAsset = result.selectedAsset;
-      populatePairSelect(selectedAsset);
-    }
-
-    if (result.selectedPair) {
-      selectedPair = result.selectedPair;
-      document.getElementById("pairSelect").value = selectedPair;
-    }
-  }
-);
-
+// Обработчик клика по статус-бару (скролл к выбранной новости)
 document.getElementById("statusBar")?.addEventListener("click", () => {
   if (selectedNews) {
     const el = Array.from(document.querySelectorAll(".news-item")).find(
@@ -688,8 +607,11 @@ document.getElementById("statusBar")?.addEventListener("click", () => {
   }
 });
 
-// Периодическое обновление данных
-setInterval(updateExtension, 1000);
+// Загрузка сохраненных данных при инициализации
+initializeStoredData();
+
+// Периодическое обновление данных (только для отображения, торговля теперь в background)
+setInterval(updateExtension, 5000); // Снижено до 5 секунд, так как торговля в background
 
 // Первоначальная загрузка
 updateExtension();
