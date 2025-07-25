@@ -10,7 +10,7 @@ let tradingSystem = {
   autoClickInterval: null,
   monitoringInterval: null,
   startTime: null,
-  MAX_TRADING_TIME: 4 * 60 * 60 * 1000 // 4 часа в миллисекундах
+  MAX_TRADING_TIME: 24 * 60 * 60 * 1000 // 24 часа в миллисекундах
 };
 
 // Торговые правила
