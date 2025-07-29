@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "DK NEWS HUNTERS",
-  "version": "1.43",
+  "version": "1.45",
   "description": "Расширение для анализа экономических новостей. (FIREFOX)",
   "permissions": [
     "tabs",
     "scripting",
     "storage",
-    "activeTab"
+    "activeTab",
+    "notifications"
   ],
   "host_permissions": [
     "https://ru.investing.com/*"

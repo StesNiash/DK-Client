@@ -203,12 +203,47 @@ function getBID() {
             // Если bid содержит строку 'id ', удаляем её
             const bidValue = bid ? bid.replace('id ', '') : null;
 
-        console.log('BID:', bidValue);
-        return bidValue;
+            console.log('[DK] BID найден:', bidValue);
+            return bidValue;
+        } else {
+            console.warn('[DK] Дочерний элемент с data-hd-show не найден');
+        }
     } else {
-        console.error('Элемент <div> не найден.');
+        console.warn('[DK] Элемент с классом .info__id не найден');
     }
-}}
+    return null;
+}
+
+// Функция для принудительного поиска BID с повторными попытками
+function forceGetBID(maxAttempts = 5, intervalMs = 2000) {
+    return new Promise((resolve) => {
+        let attempts = 0;
+        
+        const tryGetBID = () => {
+            attempts++;
+            console.log(`[DK] Попытка получения BID #${attempts}`);
+            
+            const bid = getBID();
+            if (bid) {
+                console.log(`[DK] BID успешно получен на попытке #${attempts}:`, bid);
+                chrome.storage.local.set({ USER_BID: bid });
+                resolve(bid);
+                return;
+            }
+            
+            if (attempts >= maxAttempts) {
+                console.error(`[DK] Не удалось получить BID за ${maxAttempts} попыток`);
+                resolve(null);
+                return;
+            }
+            
+            console.log(`[DK] BID не найден, следующая попытка через ${intervalMs}ms`);
+            setTimeout(tryGetBID, intervalMs);
+        };
+        
+        tryGetBID();
+    });
+}
 
 // Основная инициализация
 if (isBrokerSite()) {
