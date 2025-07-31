@@ -414,6 +414,60 @@ function populatePairSelect(asset) {
 }
 
 /**
+ * Ожидает появления элемента на странице с повторными проверками
+ * @param {string} selector - CSS селектор элемента
+ * @param {number} maxAttempts - Максимальное количество попыток
+ * @param {number} intervalMs - Интервал между проверками в миллисекундах
+ * @returns {Promise<boolean>} - true если элемент найден
+ */
+function waitForElement(selector, maxAttempts = 10, intervalMs = 50) {
+  return new Promise((resolve) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (!tabs || tabs.length === 0) {
+        resolve(false);
+        return;
+      }
+      
+      let attempts = 0;
+      
+      const checkElement = () => {
+        attempts++;
+        
+        chrome.scripting.executeScript({
+          target: { tabId: tabs[0].id },
+          func: (sel) => {
+            return document.querySelector(sel) !== null;
+          },
+          args: [selector]
+        }, (results) => {
+          if (chrome.runtime.lastError) {
+            console.error("Error checking element:", chrome.runtime.lastError);
+            resolve(false);
+            return;
+          }
+          
+          if (results && results[0] && results[0].result) {
+            console.log(`Элемент ${selector} найден на попытке ${attempts}`);
+            resolve(true);
+            return;
+          }
+          
+          if (attempts >= maxAttempts) {
+            console.warn(`Элемент ${selector} не найден за ${maxAttempts} попыток`);
+            resolve(false);
+            return;
+          }
+          
+          setTimeout(checkElement, intervalMs);
+        });
+      };
+      
+      checkElement();
+    });
+  });
+}
+
+/**
  * Выбирает валютную пару на активной странице брокера
  * @param {string} pair - Валютная пара (например, EUR/USD)
  * @returns {Promise<boolean>} - Успешность выбора
@@ -428,8 +482,26 @@ async function selectCurrencyPairOnPage(pair) {
     return false;
   }
   
-  // 2. Ждем немного для открытия списка
-  await new Promise(resolve => setTimeout(resolve, 500));
+  // 2. Ждем появления селектора подкатегории валютных пар
+  const subSelectorAvailable = await waitForElement('a.assets-block__nav-item.assets-block__nav-item--currency');
+  if (!subSelectorAvailable) {
+    console.error("Селектор подкатегории валютных пар не появился");
+    return false;
+  }
+
+  // 2.1. Кликаем по селектору подкатегории валютных пар
+  const subSelectorClicked = await clickElement('a.assets-block__nav-item.assets-block__nav-item--currency');
+  if (!subSelectorClicked) {
+    console.error("Не удалось найти селектор подкатегории валютных пар");
+    return false;
+  }
+
+  // 2.2. Ждем появления списка валютных пар
+  const pairListAvailable = await waitForElement('span.alist__label');
+  if (!pairListAvailable) {
+    console.error("Список валютных пар не появился");
+    return false;
+  }
   
   // 3. Ищем нужную пару в списке и кликаем по ней
   const pairElements = await new Promise(resolve => {
@@ -441,8 +513,10 @@ async function selectCurrencyPairOnPage(pair) {
           const targetElement = elements.find(el => el.textContent.trim() === pairToFind);
           if (targetElement) {
             targetElement.click();
+            console.log(`Выбрана валютная пара: ${pairToFind}`);
             return true;
           }
+          console.warn(`Валютная пара ${pairToFind} не найдена в списке`);
           return false;
         },
         args: [pair]
