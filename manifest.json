@@ -11,10 +11,11 @@
     "notifications"
   ],
   "host_permissions": [
-    "https://ru.investing.com/*"
+    "https://ru.investing.com/*",
+    "<all_urls>"
   ],
   "web_accessible_resources": [{
-    "resources": ["icons/watermark_small.png"],
+    "resources": ["icons/watermark_small.png", "debug.html", "debug.js"],
     "js": ["content.js"],
     "matches": ["<all_urls>"]
   }],
