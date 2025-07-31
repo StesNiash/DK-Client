@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DK NEWS HUNTERS - Debug Console</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            padding: 30px;
+        }
+
+        .section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 25px;
+            border: 1px solid #e9ecef;
+        }
+
+        .section h2 {
+            color: #495057;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+
+        .button-group {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #28a745, #1e7e34);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #dc3545, #c82333);
+            color: white;
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #ffc107, #e0a800);
+            color: #212529;
+        }
+
+        .btn-info {
+            background: linear-gradient(135deg, #17a2b8, #138496);
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+        }
+
+        .log-container {
+            grid-column: 1 / -1;
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            min-height: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+        }
+
+        .log-header h3 {
+            color: #00ff00;
+            margin: 0;
+        }
+
+        .log-clear {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .log-content {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .status-bar {
+            background: #343a40;
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #dc3545;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.active {
+            background: #28a745;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .test-input {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            align-items: end;
+        }
+
+        .accordion {
+            margin-bottom: 15px;
+        }
+
+        .accordion-header {
+            background: #e9ecef;
+            padding: 10px 15px;
+            cursor: pointer;
+            border-radius: 6px;
+            font-weight: 600;
+            user-select: none;
+            transition: background-color 0.3s ease;
+        }
+
+        .accordion-header:hover {
+            background: #dee2e6;
+        }
+
+        .accordion-content {
+            display: none;
+            padding: 15px;
+            border: 1px solid #e9ecef;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+        }
+
+        .accordion-content.active {
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 20px;
+                padding: 20px;
+            }
+
+            .header {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 DK NEWS HUNTERS</h1>
+            <p>Debug Console & Testing Environment</p>
+        </div>
+
+        <div class="main-content">
+            <!-- Торговая система -->
+            <div class="section">
+                <h2>⚡ Торговая система</h2>
+                
+                <div class="accordion">
+                    <div class="accordion-header" data-target="trading-controls">
+                        🎮 Управление торговлей
+                    </div>
+                    <div class="accordion-content" id="trading-controls">
+                        <div class="button-group">
+                            <button class="btn btn-success" data-action="trading-activate">🟢 Активировать систему</button>
+                            <button class="btn btn-danger" data-action="trading-deactivate">🔴 Деактивировать систему</button>
+                            <button class="btn btn-info" data-action="trading-getState">📊 Состояние системы</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion">
+                    <div class="accordion-header" data-target="manual-trading">
+                        🖱️ Ручная торговля
+                    </div>
+                    <div class="accordion-content" id="manual-trading">
+                        <div class="button-group">
+                            <button class="btn btn-success" data-action="trading-buy">📈 Купить (Call)</button>
+                            <button class="btn btn-danger" data-action="trading-sell">📉 Продать (Put)</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion">
+                    <div class="accordion-header" data-target="test-trading">
+                        🧪 Тест торговых операций
+                    </div>
+                    <div class="accordion-content" id="test-trading">
+                        <div class="form-group">
+                            <label>Валюта новости:</label>
+                            <select class="form-control" id="testCurrency">
+                                <option value="EUR">EUR</option>
+                                <option value="USD">USD</option>
+                                <option value="GBP">GBP</option>
+                                <option value="JPY">JPY</option>
+                                <option value="AUD">AUD</option>
+                                <option value="CAD">CAD</option>
+                                <option value="CHF">CHF</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Тип факта:</label>
+                            <select class="form-control" id="testFactType">
+                                <option value="GFP">Зеленый (GFP)</option>
+                                <option value="RFP">Красный (RFP)</option>
+                                <option value="BFP">Черный (BFP)</option>
+                            </select>
+                        </div>
+                        <div class="button-group">
+                            <button class="btn btn-primary" data-action="test-simulateNews">🎲 Симуляция новости</button>
+                            <button class="btn btn-warning" data-action="test-tradingCycle">🔄 Полный цикл торговли</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Новости и данные -->
+            <div class="section">
+                <h2>📰 Новости и данные</h2>
+                
+                <div class="accordion">
+                    <div class="accordion-header" data-target="news-controls">
+                        📡 Управление новостями
+                    </div>
+                    <div class="accordion-content" id="news-controls">
+                        <div class="button-group">
+                            <button class="btn btn-primary" data-action="news-update">🔄 Обновить новости</button>
+                            <button class="btn btn-info" data-action="news-show">📋 Показать новости</button>
+                            <button class="btn btn-warning" data-action="news-clearProcessed">🧹 Очистить обработанные</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion">
+                    <div class="accordion-header" data-target="test-data">
+                        🎭 Тестовые данные
+                    </div>
+                    <div class="accordion-content" id="test-data">
+                        <div class="button-group">
+                            <button class="btn btn-success" data-action="test-loadSampleNews">📊 Загрузить тестовые новости</button>
+                            <button class="btn btn-danger" data-action="data-clearAll">🗑️ Очистить все данные</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Авторизация и BID -->
+            <div class="section">
+                <h2>🔐 Авторизация и BID</h2>
+                
+                <div class="accordion">
+                    <div class="accordion-header" data-target="auth-controls">
+                        🔑 Управление авторизацией
+                    </div>
+                    <div class="accordion-content" id="auth-controls">
+                        <div class="button-group">
+                            <button class="btn btn-info" data-action="auth-checkBID">🔍 Проверить BID</button>
+                            <button class="btn btn-warning" data-action="auth-forceBID">⚡ Принудительно получить BID</button>
+                            <button class="btn btn-success" data-action="auth-verifySubscription">✅ Проверить подписку</button>
+                            <button class="btn btn-danger" data-action="auth-logout">🚪 Выйти</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Системная диагностика -->
+            <div class="section">
+                <h2>🔧 Системная диагностика</h2>
+                
+                <div class="accordion">
+                    <div class="accordion-header" data-target="diagnostics">
+                        🩺 Диагностика системы
+                    </div>
+                    <div class="accordion-content" id="diagnostics">
+                        <div class="button-group">
+                            <button class="btn btn-primary" data-action="system-diagnose">🔍 Полная диагностика</button>
+                            <button class="btn btn-info" data-action="system-status">📊 Статус компонентов</button>
+                            <button class="btn btn-warning" data-action="test-backgroundConnection">🔗 Тест связи с background</button>
+                            <button class="btn btn-danger" data-action="system-reset">🔄 Полный сброс</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion">
+                    <div class="accordion-header" data-target="browser-actions">
+                        🌐 Действия браузера
+                    </div>
+                    <div class="accordion-content" id="browser-actions">
+                        <div class="button-group">
+                            <button class="btn btn-info" data-action="browser-getAllTabs">📑 Все вкладки</button>
+                            <button class="btn btn-success" data-action="browser-findBrokerTabs">🏦 Найти брокерские вкладки</button>
+                            <button class="btn btn-primary" data-action="browser-testNotification">🔔 Тест уведомления</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Консоль логов -->
+            <div class="log-container">
+                <div class="log-header">
+                    <h3>📝 Консоль логов</h3>
+                    <button class="log-clear" data-action="log-clear">Очистить</button>
+                </div>
+                <div class="log-content" id="logContent">
+                    Ожидание команд...
+                </div>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Система готова</span>
+            </div>
+            <div id="extensionInfo">
+                Версия: <span id="versionInfo">Загрузка...</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="debug.js"></script>
+</body>
+</html>

@@ -437,6 +437,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
+
+  if (message.action === "clearProcessedNews") {
+    // Очищаем обработанные новости (для debug режима)
+    tradingSystem.processedNews = {};
+    tradingSystem.initialNewsStates = {};
+    tradingSystem.lastProcessedFact = null;
+    chrome.storage.local.remove(['processedNews']);
+    console.log('[Background] Обработанные новости очищены (DEBUG MODE)');
+    sendResponse({ success: true });
+    return true;
+  }
+
+  if (message.action === "resetTradingSystem") {
+    // Полный сброс торговой системы (для debug режима)
+    tradingSystem.processedNews = {};
+    tradingSystem.initialNewsStates = {};
+    tradingSystem.lastProcessedFact = null;
+    chrome.storage.local.remove(['processedNews']);
+    
+    if (tradingSystem.isActive) {
+      deactivateTradingSystem("Сброс системы (DEBUG MODE)");
+    }
+    
+    console.log('[Background] Торговая система полностью сброшена (DEBUG MODE)');
+    sendResponse({ success: true });
+    return true;
+  }
 });
 
 // Инициализация системы
@@ -493,6 +520,284 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // Инициализация при первом запуске (для тестирования)
 initializeTradingSystem();
+
+// ============================================================================
+// ФУНКЦИИ ДЛЯ РАБОТЫ С BID И АВТОРИЗАЦИЕЙ В BACKGROUND
+// ============================================================================
+
+/**
+ * Проверяет мета-данные сайта для определения брокерского ресурса
+ * Выполняется в контексте веб-страницы
+ * @returns {boolean} - true если сайт определен как брокерский
+ */
+function checkBrokerMeta() {
+  try {
+    // 1. Проверка специфичных мета-тегов брокера
+    const themeColorMeta = document.querySelector('meta[name="theme-color"][content="#1F1F23"]');
+    const colorSchemesMeta = document.querySelector('meta[name="supported-color-schemes"][content="light dark"]');
+    if (themeColorMeta && colorSchemesMeta) {
+      console.log('[DK] Найдены специфичные мета-теги брокера');
+      return true;
+    }
+    
+    // 2. Проверка Open Graph для брокера/торговли
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    const ogSiteName = document.querySelector('meta[property="og:site_name"]');
+    const ogDescription = document.querySelector('meta[property="og:description"]');
+    
+    if (ogTitle && (ogTitle.content.toLowerCase().includes('trading') || ogTitle.content.toLowerCase().includes('broker'))) {
+      console.log('[DK] Найден брокерский сайт по og:title');
+      return true;
+    }
+    
+    if (ogSiteName && (ogSiteName.content.toLowerCase().includes('trading') || ogSiteName.content.toLowerCase().includes('broker'))) {
+      console.log('[DK] Найден брокерский сайт по og:site_name');
+      return true;
+    }
+    
+    if (ogDescription && (ogDescription.content.toLowerCase().includes('trading') || ogDescription.content.toLowerCase().includes('broker'))) {
+      console.log('[DK] Найден брокерский сайт по og:description');
+      return true;
+    }
+    
+    // 3. Проверка наличия элемента с BID (.info__id)
+    const bidElement = document.querySelector('.info__id');
+    if (bidElement) {
+      console.log('[DK] Найден элемент с BID на странице');
+      return true;
+    }
+    
+    console.log('[DK] Сайт не определен как брокерский');
+    return false;
+  } catch (error) {
+    console.error('[DK] Ошибка при проверке мета-данных:', error);
+    return false;
+  }
+}
+
+/**
+ * Пытается получить BID из открытых вкладок брокера (версия для background)
+ * @returns {Promise<string|null>} - BID или null при неудаче
+ */
+async function attemptGetBIDBackground() {
+  return new Promise((resolve) => {
+    chrome.tabs.query({ url: "*://*/*" }, async (tabs) => {
+      console.log('[Background] Проверка', tabs.length, 'вкладок на предмет брокерских сайтов');
+      
+      // Проверяем каждую вкладку с помощью функции checkBrokerMeta
+      const brokerTabs = [];
+      
+      for (const tab of tabs) {
+        // Пропускаем системные вкладки
+        if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+          continue;
+        }
+        
+        try {
+          // Проверяем, является ли вкладка брокерским сайтом
+          const results = await new Promise((tabResolve) => {
+            chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              func: checkBrokerMeta
+            }, (results) => {
+              if (chrome.runtime.lastError) {
+                console.log('[Background] Не удалось проверить вкладку', tab.id, ':', chrome.runtime.lastError.message);
+                tabResolve(false);
+              } else if (results && results[0]) {
+                tabResolve(results[0].result);
+              } else {
+                tabResolve(false);
+              }
+            });
+          });
+          
+          if (results) {
+            console.log('[Background] Найден брокерский сайт на вкладке:', tab.url);
+            brokerTabs.push(tab);
+          }
+        } catch (error) {
+          console.log('[Background] Ошибка при проверке вкладки', tab.id, ':', error);
+        }
+      }
+
+      if (brokerTabs.length === 0) {
+        console.log('[Background] Не найдены вкладки брокера после проверки всех вкладок');
+        resolve(null);
+        return;
+      }
+
+      console.log('[Background] Найдено', brokerTabs.length, 'брокерских вкладок, пытаемся получить BID с первой');
+
+      // Пытаемся получить BID с первой найденной вкладки брокера
+      chrome.scripting.executeScript({
+        target: { tabId: brokerTabs[0].id },
+        func: () => {
+          // Функция для принудительного поиска BID с повторными попытками
+          function forceGetBID(maxAttempts = 5, intervalMs = 2000) {
+            return new Promise((resolve) => {
+              let attempts = 0;
+              
+              const tryGetBID = () => {
+                attempts++;
+                console.log(`[DK] Попытка получения BID #${attempts}`);
+                
+                // Поиск элемента с классом info__id
+                const divElement = document.querySelector('.info__id');
+                
+                if (divElement) {
+                  const childWithDataHdShow = Array.from(divElement.children).find(child => child.hasAttribute('data-hd-show'));
+                  if (childWithDataHdShow) {
+                    const bid = childWithDataHdShow.getAttribute('data-hd-show');
+                    const bidValue = bid ? bid.replace('id ', '') : null;
+
+                    if (bidValue) {
+                      console.log(`[DK] BID успешно получен на попытке #${attempts}:`, bidValue);
+                      // Сохраняем BID в storage
+                      if (typeof chrome !== 'undefined' && chrome.storage) {
+                        chrome.storage.local.set({ USER_BID: bidValue });
+                      }
+                      resolve(bidValue);
+                      return;
+                    }
+                  }
+                }
+                
+                if (attempts >= maxAttempts) {
+                  console.error(`[DK] Не удалось получить BID за ${maxAttempts} попыток`);
+                  resolve(null);
+                  return;
+                }
+                
+                console.log(`[DK] BID не найден, следующая попытка через ${intervalMs}ms`);
+                setTimeout(tryGetBID, intervalMs);
+              };
+              
+              tryGetBID();
+            });
+          }
+          
+          return forceGetBID(5, 2000); // 5 попыток, интервал 2 сек
+        }
+      }, (results) => {
+        if (chrome.runtime.lastError) {
+          console.error('[Background] Ошибка при выполнении скрипта:', chrome.runtime.lastError);
+          resolve(null);
+        } else if (results && results[0]) {
+          resolve(results[0].result);
+        } else {
+          resolve(null);
+        }
+      });
+    });
+  });
+}
+
+/**
+ * Проверяет статус подписки пользователя (версия для background)
+ * @param {string} token - Токен авторизации  
+ * @returns {Promise<boolean>} - Валидность подписки
+ */
+async function verifySubscriptionBackground(token) {
+  try {
+    let { USER_BID } = await chrome.storage.local.get("USER_BID");
+    
+    // Если BID не найден, пытаемся получить его повторно
+    if (!USER_BID) {
+      console.log('[Background] BID не найден при проверке подписки, попытка получить заново');
+      
+      try {
+        USER_BID = await attemptGetBIDBackground();
+        if (USER_BID) {
+          console.log('[Background] BID успешно получен при проверке подписки:', USER_BID);
+          // Обновляем expected_bid, так как получили новый BID
+          chrome.storage.local.set({ expected_bid: USER_BID });
+        } else {
+          console.log('[Background] Не удалось получить BID при проверке подписки');
+        }
+      } catch (error) {
+        console.error('[Background] Ошибка при попытке получить BID:', error);
+      }
+    }
+    
+    const response = await fetch("http://176.108.253.203:8000/verify", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        token,
+        bid: USER_BID 
+       })
+    });
+    
+    // Если ответ не получен (например, timeout)
+    if (!response) {
+      console.error("[Background] Не удалось получить ответ от сервера");
+      return true; // Сохраняем текущее состояние
+    }
+    
+    const data = await response.json();
+    console.log("[Background] Проверка, ответ:", data.message);
+    
+    if (!data.success || !data.subscriptionActive) {
+      const reason = data.message || "Подписка неактивна или истекла";
+      console.log("[Background]", reason);
+      
+      // Очищаем токен и отключаем торговую систему
+      chrome.storage.local.remove(["authToken", "expected_bid"]);
+      if (tradingSystem.isActive) {
+        deactivateTradingSystem(reason);
+      }
+      
+      return false;
+    }
+    
+    // Проверка BID (Broker ID) - мягкая проверка
+    const { expected_bid } = await chrome.storage.local.get("expected_bid");
+    
+    if (!USER_BID) {
+      console.log("[Background] BID не найден даже после повторной попытки");
+      return true; // Не выходим, только предупреждение
+    }
+    
+    // Проверяем смену пользователя только если есть оба BID
+    if (expected_bid && USER_BID && expected_bid !== USER_BID) {
+      const reason = "Обнаружена смена пользователя";
+      console.log(`[Background] ${reason}! Выполняем выход.`);
+      
+      // Очищаем токен и отключаем торговую систему
+      chrome.storage.local.remove(["authToken", "expected_bid"]);
+      if (tradingSystem.isActive) {
+        deactivateTradingSystem(reason);
+      }
+      
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("[Background] Ошибка при проверке подписки:", error);
+    // В случае любой ошибки (сети, парсинга и т.д.) сохраняем текущее состояние
+    return true;
+  }
+}
+
+// ============================================================================
+// ПЕРИОДИЧЕСКИЕ ПРОВЕРКИ В BACKGROUND
+// ============================================================================
+
+// Периодическая проверка подписки каждые 5 минут
+setInterval(async () => {
+  chrome.storage.local.get("authToken", async (result) => {
+    if (result.authToken) {
+      console.log('[Background] Выполняется периодическая проверка подписки');
+      await verifySubscriptionBackground(result.authToken);
+    }
+  });
+}, 5 * 60 * 1000);
+
+console.log('[Background] Периодическая проверка подписки активирована (каждые 5 минут)');
 
 function extractNewsData() {
   const rows = document.querySelectorAll("table.genTbl tr.js-event-item");

@@ -855,16 +855,6 @@ chrome.storage.local.get("authToken", async (result) => {
   }
 });
 
-// Периодическая проверка подписки каждые 5 минут
-setInterval(async () => {
-  chrome.storage.local.get("authToken", async (result) => {
-    if (result.authToken) {
-      await verifySubscription(result.authToken);
-    }
-  });
-}, 5 * 60 * 1000);
-
-// Загрузка данных и периодические обновления
+// Загрузка данных при открытии popup (без периодических обновлений)
 initializeStoredData();
-setInterval(updateExtension, 5000);
 updateExtension();
