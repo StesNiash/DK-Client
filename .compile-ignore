@@ -17,6 +17,8 @@ Thumbs.db
 *.zip
 build
 dist
+debug.js
+debug.html
 
 # Исключения для папки src (не копировать в итоговые архивы)
 archive
