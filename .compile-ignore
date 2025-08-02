@@ -1,0 +1,24 @@
+# Файлы и папки, которые нужно исключить из сборки
+.git
+.gitignore
+.compile-ignore
+src
+build.py
+build.bat
+README.md
+DEBUG_GUIDE.md
+TESTING_INSTRUCTIONS.md
+BUILD_INSTRUCTIONS.md
+*.md
+.vscode
+node_modules
+.DS_Store
+Thumbs.db
+*.zip
+build
+dist
+debug.js
+debug.html
+
+# Исключения для папки src (не копировать в итоговые архивы)
+archive
