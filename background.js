@@ -82,15 +82,44 @@ async function executeTrade(action, newsItem) {
 
   try {
     const tabs = await chrome.tabs.query({ url: "*://*/*" });
-    const brokerTab = tabs.find(tab => 
-      tab.url && (
-        tab.url.includes('broker') || 
-        tab.url.includes('trading') ||
-        tab.url.includes('olymptrade') ||
-        tab.url.includes('pocket') ||
-        tab.url.includes('binomo')
-      )
-    );
+    console.log('[executeTrade] Проверка', tabs.length, 'вкладок на предмет брокерских сайтов');
+    
+    // Ищем вкладку брокера с помощью той же логики, что и в checkBrokerMeta
+    let brokerTab = null;
+    
+    for (const tab of tabs) {
+      // Пропускаем системные вкладки
+      if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+        continue;
+      }
+      
+      try {
+        // Проверяем, является ли вкладка брокерским сайтом
+        const results = await new Promise((resolve) => {
+          chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: checkBrokerMeta
+          }, (results) => {
+            if (chrome.runtime.lastError) {
+              console.log('[executeTrade] Не удалось проверить вкладку', tab.id, ':', chrome.runtime.lastError.message);
+              resolve(false);
+            } else if (results && results[0]) {
+              resolve(results[0].result);
+            } else {
+              resolve(false);
+            }
+          });
+        });
+        
+        if (results) {
+          console.log('[executeTrade] Найден брокерский сайт на вкладке:', tab.url);
+          brokerTab = tab;
+          break; // Используем первую найденную вкладку
+        }
+      } catch (error) {
+        console.log('[executeTrade] Ошибка при проверке вкладки', tab.id, ':', error);
+      }
+    }
 
     if (!brokerTab) {
       console.error("Не найдена вкладка брокера");
