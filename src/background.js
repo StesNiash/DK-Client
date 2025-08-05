@@ -568,34 +568,6 @@ function checkBrokerMeta() {
       console.log('[DK] Найдены специфичные мета-теги брокера');
       return true;
     }
-    
-    // 2. Проверка Open Graph для брокера/торговли
-    const ogTitle = document.querySelector('meta[property="og:title"]');
-    const ogSiteName = document.querySelector('meta[property="og:site_name"]');
-    const ogDescription = document.querySelector('meta[property="og:description"]');
-    
-    if (ogTitle && (ogTitle.content.toLowerCase().includes('trading') || ogTitle.content.toLowerCase().includes('broker'))) {
-      console.log('[DK] Найден брокерский сайт по og:title');
-      return true;
-    }
-    
-    if (ogSiteName && (ogSiteName.content.toLowerCase().includes('trading') || ogSiteName.content.toLowerCase().includes('broker'))) {
-      console.log('[DK] Найден брокерский сайт по og:site_name');
-      return true;
-    }
-    
-    if (ogDescription && (ogDescription.content.toLowerCase().includes('trading') || ogDescription.content.toLowerCase().includes('broker'))) {
-      console.log('[DK] Найден брокерский сайт по og:description');
-      return true;
-    }
-    
-    // 3. Проверка наличия элемента с BID (.info__id)
-    const bidElement = document.querySelector('.info__id');
-    if (bidElement) {
-      console.log('[DK] Найден элемент с BID на странице');
-      return true;
-    }
-    
     console.log('[DK] Сайт не определен как брокерский');
     return false;
   } catch (error) {

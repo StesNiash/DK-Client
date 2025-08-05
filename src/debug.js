@@ -390,8 +390,9 @@ DK.test = {
     async simulateNews() {
         const currency = document.getElementById('testCurrency').value;
         const factType = document.getElementById('testFactType').value;
+        const selectedPair = document.getElementById('testPair').value;
         
-        DK.log.info(`🎲 Симуляция новости: ${currency} ${factType}`);
+        DK.log.info(`🎲 Симуляция новости: ${currency} ${factType} для пары ${selectedPair}`);
         
         // Создаем уникальную новость с timestamp для избежания дублирования
         const timestamp = Date.now();
@@ -416,12 +417,13 @@ DK.test = {
                     debugId: testNews.debugId 
                 },
                 selectedAsset: currency,
-                selectedPair: this.getTestPair(currency)
+                selectedPair: selectedPair
             });
             
             DK.log.success("✅ Тестовая новость создана и выбрана");
             DK.log.info(`📰 Событие: ${testNews.event}`);
             DK.log.info(`💱 Валюта: ${testNews.currency}`);
+            DK.log.info(`📈 Валютная пара: ${selectedPair}`);
             DK.log.info(`📊 Факт: ${testNews.actual} (${testNews.actualType})`);
             DK.log.info(`🔢 Debug ID: ${testNews.debugId}`);
         } catch (error) {
@@ -458,13 +460,36 @@ DK.test = {
             await DK.trading.getState();
             await this.delay(1000);
             
-            // 4. Имитируем торговлю
-            DK.log.info("💰 Этап 4: Имитация торговой операции");
-            await DK.trading.buy();
-            await this.delay(2000);
+            // 4. Анализируем новость и определяем направление торговли
+            DK.log.info("🔍 Этап 4: Анализ новости для определения направления торговли");
+            const currency = document.getElementById('testCurrency').value;
+            const factType = document.getElementById('testFactType').value;
+            const selectedPair = document.getElementById('testPair').value;
             
-            // 5. Деактивируем систему
-            DK.log.info("🔴 Этап 5: Деактивация системы");
+            const tradeDirection = this.calculateTradeDirection(currency, factType, selectedPair);
+            
+            if (tradeDirection === 'none') {
+                DK.log.warn("⚠️ Торговля не рекомендуется");
+                DK.log.info(`💡 Логика: ${this.getTradeLogicExplanation(currency, factType, selectedPair, tradeDirection)}`);
+                
+                // 5. Этап пропускается - торговли не будет
+                DK.log.info("🚫 Этап 5: Торговля пропущена (нейтральная новость)");
+            } else {
+                DK.log.info(`📈 Рекомендуемое направление торговли: ${tradeDirection === 'buy' ? 'CALL (вверх)' : 'PUT (вниз)'}`);
+                DK.log.info(`💡 Логика: ${this.getTradeLogicExplanation(currency, factType, selectedPair, tradeDirection)}`);
+                
+                // 5. Имитируем торговлю с правильным направлением
+                DK.log.info("💰 Этап 5: Имитация торговой операции");
+                if (tradeDirection === 'buy') {
+                    await DK.trading.buy();
+                } else {
+                    await DK.trading.sell();
+                }
+                await this.delay(2000);
+            }
+            
+            // 6. Деактивируем систему
+            DK.log.info("🔴 Этап 6: Деактивация системы");
             await DK.trading.deactivate();
             
             DK.log.success("✅ Полный цикл торговли завершен");
@@ -556,6 +581,92 @@ DK.test = {
     
     delay(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    },
+    
+    calculateTradeDirection(currency, factType, selectedPair) {
+        // Для BFP (черный факт) не открываем сделку
+        if (factType === 'BFP') {
+            return 'none'; // Не торгуем при нейтральных новостях
+        }
+        
+        // Определяем базовую и котируемую валюты
+        const [baseCurrency, quoteCurrency] = selectedPair.split('/');
+        
+        // Определяем влияние новости на пару
+        let direction;
+        
+        if (currency === baseCurrency) {
+            // Новость по базовой валюте
+            switch (factType) {
+                case 'GFP': // Позитивная новость - базовая валюта укрепляется
+                    direction = 'buy'; // CALL
+                    break;
+                case 'RFP': // Негативная новость - базовая валюта ослабевает
+                    direction = 'sell'; // PUT
+                    break;
+                default:
+                    direction = 'none';
+            }
+        } else if (currency === quoteCurrency) {
+            // Новость по котируемой валюте - обратная логика
+            switch (factType) {
+                case 'GFP': // Позитивная новость по котируемой валюте - пара падает
+                    direction = 'sell'; // PUT
+                    break;
+                case 'RFP': // Негативная новость по котируемой валюте - пара растет
+                    direction = 'buy'; // CALL
+                    break;
+                default:
+                    direction = 'none';
+            }
+        } else {
+            // Новость по валюте, не входящей в пару - влияние косвенное или отсутствует
+            // Используем общие рыночные тенденции
+            switch (factType) {
+                case 'GFP':
+                    direction = 'buy'; // Позитивные новости обычно поддерживают риск
+                    break;
+                case 'RFP':
+                    direction = 'sell'; // Негативные новости снижают аппетит к риску
+                    break;
+                default:
+                    direction = 'none';
+            }
+        }
+        
+        return direction;
+    },
+    
+    getTradeLogicExplanation(currency, factType, selectedPair, direction) {
+        const [baseCurrency, quoteCurrency] = selectedPair.split('/');
+        const factTypeNames = {
+            'GFP': 'позитивный (зеленый)',
+            'RFP': 'негативный (красный)', 
+            'BFP': 'нейтральный (черный)'
+        };
+        
+        const factName = factTypeNames[factType] || factType;
+        
+        // Для BFP или когда direction === 'none'
+        if (direction === 'none' || factType === 'BFP') {
+            if (currency === baseCurrency) {
+                return `${factName} факт по ${currency} (базовая валюта в ${selectedPair}) → нейтральное влияние на валюту → нет четкого сигнала для торговли → торговля не рекомендуется`;
+            } else if (currency === quoteCurrency) {
+                return `${factName} факт по ${currency} (котируемая валюта в ${selectedPair}) → нейтральное влияние на валюту → нет четкого сигнала для торговли → торговля не рекомендуется`;
+            } else {
+                return `${factName} факт по ${currency} (не входит в пару ${selectedPair}) → нейтральная новость без торгового сигнала → торговля не рекомендуется`;
+            }
+        }
+        
+        const directionName = direction === 'buy' ? 'CALL (вверх)' : 'PUT (вниз)';
+        
+        if (currency === baseCurrency) {
+            return `${factName} факт по ${currency} (базовая валюта в ${selectedPair}) → ${currency} ${factType === 'GFP' ? 'укрепляется' : 'ослабевает'} → пара ${selectedPair} идет ${direction === 'buy' ? 'вверх' : 'вниз'} → ${directionName}`;
+        } else if (currency === quoteCurrency) {
+            return `${factName} факт по ${currency} (котируемая валюта в ${selectedPair}) → ${currency} ${factType === 'GFP' ? 'укрепляется' : 'ослабевает'} → пара ${selectedPair} идет ${direction === 'buy' ? 'вверх' : 'вниз'} (обратная реакция) → ${directionName}`;
+        } else {
+            return `${factName} факт по ${currency} (не входит в пару ${selectedPair}) → косвенное влияние через общие рыночные настроения → ${directionName}`;
+        }
     }
 };
 
@@ -832,6 +943,92 @@ function toggleAccordion(targetId) {
     }
 }
 
+function updateCurrencyPairs(selectedCurrency) {
+    const pairSelect = document.getElementById('testPair');
+    if (!pairSelect) return;
+
+    // Определяем релевантные пары для выбранной валюты
+    const currencyPairs = {
+        "EUR": [
+            { value: "EUR/USD", text: "EUR/USD" },
+            { value: "EUR/GBP", text: "EUR/GBP" },
+            { value: "EUR/JPY", text: "EUR/JPY" },
+            { value: "EUR/CHF", text: "EUR/CHF" }
+        ],
+        "USD": [
+            { value: "EUR/USD", text: "EUR/USD" },
+            { value: "USD/JPY", text: "USD/JPY" },
+            { value: "GBP/USD", text: "GBP/USD" },
+            { value: "AUD/USD", text: "AUD/USD" },
+            { value: "USD/CAD", text: "USD/CAD" },
+            { value: "USD/CHF", text: "USD/CHF" },
+            { value: "NZD/USD", text: "NZD/USD" }
+        ],
+        "GBP": [
+            { value: "GBP/USD", text: "GBP/USD" },
+            { value: "EUR/GBP", text: "EUR/GBP" },
+            { value: "GBP/JPY", text: "GBP/JPY" },
+            { value: "GBP/CHF", text: "GBP/CHF" }
+        ],
+        "JPY": [
+            { value: "USD/JPY", text: "USD/JPY" },
+            { value: "EUR/JPY", text: "EUR/JPY" },
+            { value: "GBP/JPY", text: "GBP/JPY" },
+            { value: "AUD/JPY", text: "AUD/JPY" },
+            { value: "CAD/JPY", text: "CAD/JPY" }
+        ],
+        "AUD": [
+            { value: "AUD/USD", text: "AUD/USD" },
+            { value: "AUD/JPY", text: "AUD/JPY" },
+            { value: "AUD/CAD", text: "AUD/CAD" }
+        ],
+        "CAD": [
+            { value: "USD/CAD", text: "USD/CAD" },
+            { value: "CAD/JPY", text: "CAD/JPY" },
+            { value: "AUD/CAD", text: "AUD/CAD" }
+        ],
+        "CHF": [
+            { value: "USD/CHF", text: "USD/CHF" },
+            { value: "EUR/CHF", text: "EUR/CHF" },
+            { value: "GBP/CHF", text: "GBP/CHF" }
+        ]
+    };
+
+    // Получаем пары для выбранной валюты или все пары по умолчанию
+    const pairs = currencyPairs[selectedCurrency] || [
+        { value: "EUR/USD", text: "EUR/USD" },
+        { value: "USD/JPY", text: "USD/JPY" },
+        { value: "GBP/USD", text: "GBP/USD" },
+        { value: "USD/CAD", text: "USD/CAD" },
+        { value: "AUD/USD", text: "AUD/USD" },
+        { value: "USD/CHF", text: "USD/CHF" }
+    ];
+
+    // Сохраняем текущий выбор
+    const currentValue = pairSelect.value;
+
+    // Очищаем и заполняем список
+    pairSelect.innerHTML = '';
+    pairs.forEach(pair => {
+        const option = document.createElement('option');
+        option.value = pair.value;
+        option.textContent = pair.text;
+        pairSelect.appendChild(option);
+    });
+
+    // Восстанавливаем выбор или выбираем первую подходящую пару
+    if (pairs.some(pair => pair.value === currentValue)) {
+        pairSelect.value = currentValue;
+    } else {
+        pairSelect.value = pairs[0].value;
+    }
+
+    // Логируем изменение
+    if (window.DK && DK.log) {
+        DK.log.info(`💱 Валютные пары обновлены для ${selectedCurrency}: ${pairs.length} доступных пар`);
+    }
+}
+
 // ============================================================================
 // ОБРАБОТЧИКИ СОБЫТИЙ
 // ============================================================================
@@ -851,6 +1048,14 @@ function setupEventListeners() {
             handleAction(action);
         });
     });
+
+    // Обработчик изменения валюты для автоматического обновления пар
+    const currencySelect = document.getElementById('testCurrency');
+    if (currencySelect) {
+        currencySelect.addEventListener('change', function() {
+            updateCurrencyPairs(this.value);
+        });
+    }
 }
 
 function handleAction(action) {
@@ -970,6 +1175,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Настраиваем обработчики событий
     setupEventListeners();
+    
+    // Инициализируем валютные пары для выбранной валюты по умолчанию
+    setTimeout(() => {
+        const defaultCurrency = document.getElementById('testCurrency')?.value || 'EUR';
+        updateCurrencyPairs(defaultCurrency);
+    }, 100);
     
     // Открываем первый аккордеон по умолчанию
     setTimeout(() => {
