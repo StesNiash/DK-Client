@@ -75,23 +75,47 @@ const TRADING_RULES = {
 
 // Функция для выполнения торговых операций через content script
 async function executeTrade(action, newsItem) {
+  console.log(`[executeTrade] 🚀 НАЧАЛО ТОРГОВОЙ ОПЕРАЦИИ: ${action.toUpperCase()}`);
+  console.log(`[executeTrade] 📰 Новость: ${newsItem?.event || 'неизвестно'}`);
+  console.log(`[executeTrade] 💱 Валюта: ${newsItem?.currency || 'неизвестно'}`);
+  console.log(`[executeTrade] 📊 Факт: ${newsItem?.actual || 'неизвестно'} (${newsItem?.actualType || 'неизвестно'})`);
+  console.log(`[executeTrade] ⏰ Время: ${new Date().toLocaleTimeString()}`);
+
   if (isNewsProcessed(newsItem)) {
-    console.log("Эта новость уже обработана, пропускаем");
+    console.log("[executeTrade] ❌ Эта новость уже обработана, пропускаем");
     return false;
   }
 
   try {
     const tabs = await chrome.tabs.query({ url: "*://*/*" });
-    console.log('[executeTrade] Проверка', tabs.length, 'вкладок на предмет брокерских сайтов');
+    console.log(`[executeTrade] 🔍 Начинаю проверку ${tabs.length} вкладок на предмет брокерских сайтов`);
+    
+    // Логируем информацию о всех вкладках для диагностики
+    const tabsInfo = tabs.slice(0, 10).map(tab => ({
+      id: tab.id,
+      url: tab.url?.substring(0, 50) + '...',
+      title: tab.title?.substring(0, 30) + '...',
+      status: tab.status,
+      active: tab.active
+    }));
+    console.log('[executeTrade] 📑 Первые 10 вкладок:', JSON.stringify(tabsInfo, null, 2));
     
     // Ищем вкладку брокера с помощью той же логики, что и в checkBrokerMeta
     let brokerTab = null;
+    let checkedTabs = 0;
+    let errorTabs = 0;
+    
+    console.log('[executeTrade] 🔍 Начинаю поиск брокерских вкладок...');
     
     for (const tab of tabs) {
       // Пропускаем системные вкладки
       if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+        console.log(`[executeTrade] ⏭️ Пропуск системной вкладки: ${tab.url?.substring(0, 50)}`);
         continue;
       }
+      
+      checkedTabs++;
+      console.log(`[executeTrade] 🔍 Проверка вкладки ${checkedTabs}: ID=${tab.id}, URL=${tab.url?.substring(0, 80)}, Status=${tab.status}`);
       
       try {
         // Проверяем, является ли вкладка брокерским сайтом
@@ -101,126 +125,257 @@ async function executeTrade(action, newsItem) {
             func: checkBrokerMeta
           }, (results) => {
             if (chrome.runtime.lastError) {
-              console.log('[executeTrade] Не удалось проверить вкладку', tab.id, ':', chrome.runtime.lastError.message);
+              console.log(`[executeTrade] ❌ Не удалось проверить вкладку ${tab.id}: ${chrome.runtime.lastError.message}`);
               resolve(false);
             } else if (results && results[0]) {
+              console.log(`[executeTrade] ✅ Результат проверки вкладки ${tab.id}: ${results[0].result}`);
               resolve(results[0].result);
             } else {
+              console.log(`[executeTrade] ⚠️ Пустой результат для вкладки ${tab.id}`);
               resolve(false);
             }
           });
         });
         
         if (results) {
-          console.log('[executeTrade] Найден брокерский сайт на вкладке:', tab.url);
+          console.log(`[executeTrade] 🎯 НАЙДЕН брокерский сайт на вкладке ${tab.id}: ${tab.url}`);
+          console.log(`[executeTrade] 📊 Статус найденной вкладки: ${tab.status}, Активная: ${tab.active}`);
           brokerTab = tab;
           break; // Используем первую найденную вкладку
+        } else {
+          console.log(`[executeTrade] ❌ Вкладка ${tab.id} не является брокерской`);
         }
       } catch (error) {
-        console.log('[executeTrade] Ошибка при проверке вкладки', tab.id, ':', error);
+        errorTabs++;
+        console.log(`[executeTrade] 💥 Ошибка при проверке вкладки ${tab.id}: ${error.message}`);
       }
     }
 
+    console.log(`[executeTrade] 📊 ИТОГИ ПОИСКА: Проверено вкладок: ${checkedTabs}, Ошибок: ${errorTabs}, Найдено брокерских: ${brokerTab ? 1 : 0}`);
+
     if (!brokerTab) {
-      console.error("Не найдена вкладка брокера");
+      console.error("[executeTrade] ❌ КРИТИЧЕСКАЯ ОШИБКА: Не найдена вкладка брокера!");
+      console.error(`[executeTrade] 📊 Статистика: Всего вкладок: ${tabs.length}, Проверено: ${checkedTabs}, Ошибок: ${errorTabs}`);
       return false;
     }
+
+    console.log(`[executeTrade] 🎯 Использую брокерскую вкладку: ID=${brokerTab.id}, URL=${brokerTab.url}`);
 
     const selector = action === "buy" 
       ? ".action-high-low.button-call-wrap a.btn.btn-call" 
       : ".action-high-low.button-put-wrap a.btn.btn-put";
 
+    console.log(`[executeTrade] 🎯 Селектор для ${action}: ${selector}`);
+    console.log(`[executeTrade] 🔄 Выполняю инъекцию скрипта в вкладку ${brokerTab.id}...`);
+
     const results = await chrome.scripting.executeScript({
       target: { tabId: brokerTab.id },
-      func: (sel) => {
+      func: (sel, actionType) => {
+        console.log(`[DK-Injected] 🚀 Скрипт инъецирован! Ищу элемент: ${sel}`);
+        console.log(`[DK-Injected] 🔍 Действие: ${actionType}`);
+        console.log(`[DK-Injected] 🌐 URL страницы: ${window.location.href}`);
+        console.log(`[DK-Injected] 📊 Состояние документа: ${document.readyState}`);
+        
+        // Проверим состояние DOM
+        const bodyExists = !!document.body;
+        const elementCount = document.querySelectorAll('*').length;
+        console.log(`[DK-Injected] 📋 Body exists: ${bodyExists}, Элементов в DOM: ${elementCount}`);
+        
         const element = document.querySelector(sel);
+        console.log(`[DK-Injected] 🔍 Результат поиска элемента: ${element ? 'НАЙДЕН' : 'НЕ НАЙДЕН'}`);
+        
         if (element) {
+          console.log(`[DK-Injected] ✅ Элемент найден:`, {
+            tagName: element.tagName,
+            className: element.className,
+            id: element.id,
+            visible: element.offsetParent !== null,
+            disabled: element.disabled,
+            style: element.style.cssText
+          });
+          
           const event = new MouseEvent('click', {
             bubbles: true,
             cancelable: true,
             view: window
           });
+          
+          console.log(`[DK-Injected] 👆 Выполняю клик по элементу...`);
           element.dispatchEvent(event);
-          console.log("Successfully clicked:", sel);
-          return true;
+          
+          console.log(`[DK-Injected] ✅ Клик выполнен успешно для ${actionType}: ${sel}`);
+          return { success: true, elementFound: true, clickExecuted: true };
         } else {
-          console.warn("Element not found:", sel);
-          return false;
+          console.warn(`[DK-Injected] ❌ Элемент не найден: ${sel}`);
+          
+          // Попытаемся найти альтернативные элементы для диагностики
+          const alternativeSelectors = [
+            '.btn-call', '.btn-put', 
+            '[data-action="call"]', '[data-action="put"]',
+            '.call-button', '.put-button',
+            '.trade-button', '.trading-button'
+          ];
+          
+          console.log(`[DK-Injected] 🔍 Поиск альтернативных селекторов...`);
+          alternativeSelectors.forEach(altSel => {
+            const altElement = document.querySelector(altSel);
+            if (altElement) {
+              console.log(`[DK-Injected] 🔍 Найден альтернативный элемент: ${altSel}`, altElement);
+            }
+          });
+          
+          return { success: false, elementFound: false, clickExecuted: false };
         }
       },
-      args: [selector]
+      args: [selector, action]
     });
 
-    if (results && results[0] && results[0].result) {
-      console.log(`Выполнена ${action === "buy" ? "покупка" : "продажа"}`);
-      markNewsAsProcessed(newsItem);
+    console.log(`[executeTrade] 📊 РЕЗУЛЬТАТ ИНЪЕКЦИИ:`, results);
+
+    if (results && results[0]) {
+      const result = results[0].result;
+      console.log(`[executeTrade] 📋 Детали результата:`, result);
       
-      // Создание уведомления
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'icons/icon48.png',
-        title: 'DK NEWS HUNTERS',
-        message: `Авто-торговля: ${action === "buy" ? "Покупка" : "Продажа"} (${tradingSystem.selectedAsset}/${tradingSystem.selectedPair})`
-      });
+      if (result && result.success) {
+        console.log(`[executeTrade] 🎉 УСПЕХ! Выполнена ${action === "buy" ? "покупка" : "продажа"}`);
+        markNewsAsProcessed(newsItem);
+        
+        // Создание уведомления
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icons/icon48.png',
+          title: 'DK NEWS HUNTERS',
+          message: `Авто-торговля: ${action === "buy" ? "Покупка" : "Продажа"} (${tradingSystem.selectedAsset}/${tradingSystem.selectedPair})`
+        });
 
-      // Логирование операции
-      const tradeLog = {
-        timestamp: new Date().toISOString(),
-        action: action === "buy" ? "Покупка" : "Продажа",
-        asset: tradingSystem.selectedAsset,
-        pair: tradingSystem.selectedPair,
-        news: newsItem.event,
-        factType: newsItem.actualType
-      };
+        // Логирование операции
+        const tradeLog = {
+          timestamp: new Date().toISOString(),
+          action: action === "buy" ? "Покупка" : "Продажа",
+          asset: tradingSystem.selectedAsset,
+          pair: tradingSystem.selectedPair,
+          news: newsItem.event,
+          factType: newsItem.actualType,
+          debugInfo: {
+            brokerTabId: brokerTab.id,
+            brokerUrl: brokerTab.url,
+            selector: selector,
+            elementFound: result.elementFound,
+            clickExecuted: result.clickExecuted
+          }
+        };
 
-      chrome.storage.local.get(['tradeHistory'], (result) => {
-        const history = result.tradeHistory || [];
-        history.push(tradeLog);
-        chrome.storage.local.set({ tradeHistory: history });
-      });
+        console.log(`[executeTrade] 📝 Сохраняю лог операции:`, tradeLog);
 
-      // Автоматическое отключение после торговли
-      setTimeout(() => {
-        deactivateTradingSystem("Торговля выполнена");
-      }, 5000); // 5 секунд задержки
+        chrome.storage.local.get(['tradeHistory'], (result) => {
+          const history = result.tradeHistory || [];
+          history.push(tradeLog);
+          chrome.storage.local.set({ tradeHistory: history });
+          console.log(`[executeTrade] 💾 Лог сохранен, всего записей: ${history.length}`);
+        });
 
-      return true;
+        // Автоматическое отключение после торговли
+        console.log(`[executeTrade] ⏰ Автоматическое отключение через 5 секунд...`);
+        setTimeout(() => {
+          deactivateTradingSystem("Торговля выполнена");
+        }, 5000);
+
+        return true;
+      } else {
+        console.error(`[executeTrade] ❌ НЕУДАЧА: Элемент не найден или клик не выполнен`);
+        console.error(`[executeTrade] 📊 Детали ошибки:`, {
+          elementFound: result?.elementFound || false,
+          clickExecuted: result?.clickExecuted || false,
+          selector: selector,
+          brokerTabId: brokerTab.id,
+          brokerUrl: brokerTab.url
+        });
+      }
+    } else {
+      console.error(`[executeTrade] ❌ КРИТИЧЕСКАЯ ОШИБКА: Не получен результат от инъекции скрипта`);
+      console.error(`[executeTrade] 📊 Результаты:`, results);
     }
+    
     return false;
   } catch (error) {
-    console.error("Ошибка при выполнении торговли:", error);
+    console.error(`[executeTrade] 💥 ИСКЛЮЧЕНИЕ при выполнении торговли: ${error.message}`);
+    console.error(`[executeTrade] 📊 Stack trace:`, error.stack);
+    console.error(`[executeTrade] 🔧 Параметры:`, {
+      action,
+      newsItem,
+      selectedAsset: tradingSystem.selectedAsset,
+      selectedPair: tradingSystem.selectedPair
+    });
     return false;
   }
 }
 
 // Проверка условий торговли
 function checkTradingConditions(newsItem) {
-  if (!tradingSystem.selectedNews || !tradingSystem.selectedAsset || !tradingSystem.selectedPair || 
-      !newsItem.actual || newsItem.actual === "—") {
+  console.log(`[checkTradingConditions] 🔍 ПРОВЕРКА УСЛОВИЙ ТОРГОВЛИ`);
+  console.log(`[checkTradingConditions] 📰 Новость: ${newsItem?.event || 'неизвестно'}`);
+  console.log(`[checkTradingConditions] 💱 Валюта: ${newsItem?.currency || 'неизвестно'}`);
+  console.log(`[checkTradingConditions] 📊 Факт: ${newsItem?.actual || 'неизвестно'} (${newsItem?.actualType || 'неизвестно'})`);
+
+  // Проверка базовых данных
+  const hasSelectedNews = !!tradingSystem.selectedNews;
+  const hasSelectedAsset = !!tradingSystem.selectedAsset;
+  const hasSelectedPair = !!tradingSystem.selectedPair;
+  const hasActual = !!(newsItem?.actual && newsItem.actual !== "—");
+
+  console.log(`[checkTradingConditions] 📋 Выбранная новость: ${hasSelectedNews ? 'ДА' : 'НЕТ'} (${tradingSystem.selectedNews?.event || 'отсутствует'})`);
+  console.log(`[checkTradingConditions] 🎯 Выбранный актив: ${hasSelectedAsset ? 'ДА' : 'НЕТ'} (${tradingSystem.selectedAsset || 'отсутствует'})`);
+  console.log(`[checkTradingConditions] 💹 Выбранная пара: ${hasSelectedPair ? 'ДА' : 'НЕТ'} (${tradingSystem.selectedPair || 'отсутствует'})`);
+  console.log(`[checkTradingConditions] 📊 Наличие факта: ${hasActual ? 'ДА' : 'НЕТ'}`);
+
+  if (!hasSelectedNews || !hasSelectedAsset || !hasSelectedPair || !hasActual) {
+    console.log(`[checkTradingConditions] ❌ ОТКЛОНЕНО: Отсутствуют базовые данные`);
     return false;
   }
 
-  if (isNewsProcessed(newsItem)) {
+  // Проверка на обработанность новости
+  const isProcessed = isNewsProcessed(newsItem);
+  console.log(`[checkTradingConditions] 🔄 Новость уже обработана: ${isProcessed ? 'ДА' : 'НЕТ'}`);
+  if (isProcessed) {
+    console.log(`[checkTradingConditions] ❌ ОТКЛОНЕНО: Новость уже обработана`);
     return false;
   }
 
-  if (hadFactInitially(newsItem)) {
+  // Проверка на первоначальное наличие факта
+  const hadInitialFact = hadFactInitially(newsItem);
+  console.log(`[checkTradingConditions] 🕐 Факт был изначально: ${hadInitialFact ? 'ДА' : 'НЕТ'}`);
+  if (hadInitialFact) {
+    console.log(`[checkTradingConditions] ❌ ОТКЛОНЕНО: Факт присутствовал изначально`);
     return false;
   }
 
+  // Проверка типа факта
   const factColor = newsItem.actualType;
-  if (factColor !== 'GFP' && factColor !== 'RFP') {
+  const isValidFactType = (factColor === 'GFP' || factColor === 'RFP');
+  console.log(`[checkTradingConditions] 🎨 Тип факта: ${factColor}, Валидный: ${isValidFactType ? 'ДА' : 'НЕТ'}`);
+  
+  if (!isValidFactType) {
+    console.log(`[checkTradingConditions] ❌ ОТКЛОНЕНО: Недопустимый тип факта (${factColor})`);
     return false;
   }
 
+  // Проверка торговых правил
   const factKey = factColor === 'GFP' ? 'green' : 'red';
   const tradingPair = TRADING_RULES[tradingSystem.selectedAsset]?.[tradingSystem.selectedPair];
   
+  console.log(`[checkTradingConditions] 🔑 Ключ факта: ${factKey}`);
+  console.log(`[checkTradingConditions] 📖 Торговые правила для ${tradingSystem.selectedAsset}/${tradingSystem.selectedPair}:`, tradingPair);
+  
   if (!tradingPair || !tradingPair[factKey]) {
+    console.log(`[checkTradingConditions] ❌ ОТКЛОНЕНО: Отсутствуют торговые правила для ${factKey}`);
     return false;
   }
 
-  return tradingPair[factKey];
+  const tradeAction = tradingPair[factKey];
+  console.log(`[checkTradingConditions] ✅ ОДОБРЕНО! Рекомендуемое действие: ${tradeAction.toUpperCase()}`);
+  console.log(`[checkTradingConditions] 💡 Логика: ${factColor} факт по ${newsItem.currency} → ${tradeAction} для ${tradingSystem.selectedPair}`);
+
+  return tradeAction;
 }
 
 // Помощные функции для обработки новостей
@@ -254,49 +409,125 @@ function hadFactInitially(newsItem) {
 
 // Обработка данных новостей
 function processNewsData(newsData) {
-  if (!tradingSystem.selectedNews || !newsData || !Array.isArray(newsData)) return;
+  console.log(`[processNewsData] 🔄 НАЧАЛО ОБРАБОТКИ НОВОСТНЫХ ДАННЫХ`);
+  console.log(`[processNewsData] ⏰ Время: ${new Date().toLocaleTimeString()}`);
+  
+  // Проверка базовых условий
+  const hasSelectedNews = !!tradingSystem.selectedNews;
+  const hasNewsData = !!(newsData && Array.isArray(newsData));
+  
+  console.log(`[processNewsData] 🎯 Выбранная новость: ${hasSelectedNews ? 'ДА' : 'НЕТ'} (${tradingSystem.selectedNews?.event || 'отсутствует'})`);
+  console.log(`[processNewsData] 📊 Данные новостей: ${hasNewsData ? 'ДА' : 'НЕТ'} (${newsData?.length || 0} элементов)`);
 
+  if (!hasSelectedNews) {
+    console.log(`[processNewsData] ❌ ПРЕКРАЩЕНО: Не выбрана новость для мониторинга`);
+    return;
+  }
+
+  if (!hasNewsData) {
+    console.log(`[processNewsData] ❌ ПРЕКРАЩЕНО: Отсутствуют новостные данные`);
+    return;
+  }
+
+  // Поиск фокусной новости
+  console.log(`[processNewsData] 🔍 Поиск новости: "${tradingSystem.selectedNews.event}" для валюты: ${tradingSystem.selectedNews.currency}`);
+  
   const focusedNews = newsData.find(item => 
     item.event === tradingSystem.selectedNews.event && 
     item.currency === tradingSystem.selectedNews.currency
   );
 
   if (!focusedNews) {
+    console.log(`[processNewsData] ❌ Фокусная новость не найдена в данных`);
+    console.log(`[processNewsData] 🔍 Доступные новости:`, newsData.slice(0, 5).map(item => 
+      `${item.event} (${item.currency}) - ${item.actual || '—'}`
+    ));
     tradingSystem.lastProcessedFact = null;
     return;
   }
 
+  console.log(`[processNewsData] ✅ Фокусная новость найдена:`, {
+    event: focusedNews.event,
+    currency: focusedNews.currency,
+    actual: focusedNews.actual || '—',
+    actualType: focusedNews.actualType || 'неизвестно',
+    time: focusedNews.time
+  });
+
+  // Сохранение первоначального состояния
   const newsKey = `${focusedNews.event}_${focusedNews.currency}`;
   if (!tradingSystem.initialNewsStates[newsKey]) {
+    console.log(`[processNewsData] 💾 Сохраняю первоначальное состояние новости: ${newsKey}`);
     saveInitialNewsState(focusedNews);
+  } else {
+    console.log(`[processNewsData] 📋 Первоначальное состояние уже сохранено для: ${newsKey}`);
   }
 
-  if (!focusedNews.actual || focusedNews.actual === "—") {
+  // Проверка наличия актуального факта
+  const hasActualFact = !!(focusedNews.actual && focusedNews.actual !== "—");
+  console.log(`[processNewsData] 📊 Наличие актуального факта: ${hasActualFact ? 'ДА' : 'НЕТ'} (${focusedNews.actual || '—'})`);
+
+  if (!hasActualFact) {
+    console.log(`[processNewsData] ⏳ Ожидание публикации факта...`);
     tradingSystem.lastProcessedFact = null;
     return;
   }
 
+  // Проверка на дублирование обработки
   const factKey = `${focusedNews.actual}-${focusedNews.actualType}`;
-  if (factKey === tradingSystem.lastProcessedFact) return;
+  const isDuplicate = (factKey === tradingSystem.lastProcessedFact);
+  
+  console.log(`[processNewsData] 🔑 Ключ факта: ${factKey}`);
+  console.log(`[processNewsData] 📋 Последний обработанный факт: ${tradingSystem.lastProcessedFact || 'отсутствует'}`);
+  console.log(`[processNewsData] 🔄 Дублирование: ${isDuplicate ? 'ДА' : 'НЕТ'}`);
 
+  if (isDuplicate) {
+    console.log(`[processNewsData] ⏭️ ПРОПУСК: Факт уже обработан`);
+    return;
+  }
+
+  // Обновление последнего обработанного факта
   tradingSystem.lastProcessedFact = factKey;
+  console.log(`[processNewsData] ✅ Обновлен последний обработанный факт: ${factKey}`);
+
+  // Проверка торговых условий
+  console.log(`[processNewsData] 🎯 Проверка торговых условий...`);
   const tradeAction = checkTradingConditions(focusedNews);
   
   if (tradeAction) {
+    console.log(`[processNewsData] 🚀 ЗАПУСК ТОРГОВОЙ ОПЕРАЦИИ: ${tradeAction.toUpperCase()}`);
     executeTrade(tradeAction, focusedNews);
+  } else {
+    console.log(`[processNewsData] ❌ Торговые условия не выполнены, операция отменена`);
   }
+
+  console.log(`[processNewsData] ✅ ОБРАБОТКА ЗАВЕРШЕНА`);
 }
 
 // Активация торговой системы
 function activateTradingSystem(newsSelection, asset, pair) {
+  console.log(`[activateTradingSystem] 🟢 АКТИВАЦИЯ ТОРГОВОЙ СИСТЕМЫ`);
+  console.log(`[activateTradingSystem] ⏰ Время активации: ${new Date().toLocaleTimeString()}`);
+  console.log(`[activateTradingSystem] 📰 Выбранная новость:`, newsSelection);
+  console.log(`[activateTradingSystem] 💱 Актив: ${asset}`);
+  console.log(`[activateTradingSystem] 📈 Валютная пара: ${pair}`);
+
   tradingSystem.isActive = true;
   tradingSystem.selectedNews = newsSelection;
   tradingSystem.selectedAsset = asset;
   tradingSystem.selectedPair = pair;
   tradingSystem.startTime = Date.now();
 
+  console.log(`[activateTradingSystem] 📊 Торговая система настроена:`, {
+    isActive: tradingSystem.isActive,
+    selectedNews: tradingSystem.selectedNews?.event,
+    selectedAsset: tradingSystem.selectedAsset,
+    selectedPair: tradingSystem.selectedPair,
+    startTime: new Date(tradingSystem.startTime).toLocaleTimeString()
+  });
+
   // Сохранение состояния
-  chrome.storage.local.set({
+  const stateToSave = {
     tradingSystemActive: true,
     tradingSystemState: {
       selectedNews: newsSelection,
@@ -304,18 +535,32 @@ function activateTradingSystem(newsSelection, asset, pair) {
       selectedPair: pair,
       startTime: tradingSystem.startTime
     }
-  });
+  };
+  
+  console.log(`[activateTradingSystem] 💾 Сохраняю состояние:`, stateToSave);
+  chrome.storage.local.set(stateToSave);
 
   // Запуск мониторинга
   if (tradingSystem.monitoringInterval) {
+    console.log(`[activateTradingSystem] 🔄 Останавливаю предыдущий интервал мониторинга`);
     clearInterval(tradingSystem.monitoringInterval);
   }
 
+  console.log(`[activateTradingSystem] ⏱️ Запускаю мониторинг новостей (каждую секунду)`);
+  console.log(`[activateTradingSystem] ⏳ Максимальное время работы: ${tradingSystem.MAX_TRADING_TIME / (60 * 60 * 1000)} часов`);
+
   tradingSystem.monitoringInterval = setInterval(() => {
     // Проверка таймаута
-    if (Date.now() - tradingSystem.startTime > tradingSystem.MAX_TRADING_TIME) {
+    const runTime = Date.now() - tradingSystem.startTime;
+    if (runTime > tradingSystem.MAX_TRADING_TIME) {
+      console.log(`[activateTradingSystem-Monitor] ⏰ ТАЙМАУТ: Превышено максимальное время работы (${runTime / (60 * 60 * 1000)} часов)`);
       deactivateTradingSystem("Превышено максимальное время работы");
       return;
+    }
+
+    // Логируем каждые 10 секунд для отслеживания работы
+    if (Math.floor(runTime / 1000) % 10 === 0) {
+      console.log(`[activateTradingSystem-Monitor] 🔄 Мониторинг активен, время работы: ${Math.floor(runTime / 1000)} секунд`);
     }
 
     // Обновление новостей и обработка
@@ -323,29 +568,56 @@ function activateTradingSystem(newsSelection, asset, pair) {
   }, 1000);
 
   // Запуск авто-клика
+  console.log(`[activateTradingSystem] 🔄 Запускаю авто-клик по кнопке 'Сегодня'`);
   startAutoClick();
 
-  console.log("Торговая система активирована");
+  console.log(`[activateTradingSystem] ✅ ТОРГОВАЯ СИСТЕМА УСПЕШНО АКТИВИРОВАНА`);
 }
 
 // Деактивация торговой системы
 function deactivateTradingSystem(reason = "Отключено вручную") {
+  console.log(`[deactivateTradingSystem] 🔴 ДЕАКТИВАЦИЯ ТОРГОВОЙ СИСТЕМЫ`);
+  console.log(`[deactivateTradingSystem] ⏰ Время деактивации: ${new Date().toLocaleTimeString()}`);
+  console.log(`[deactivateTradingSystem] 📝 Причина: ${reason}`);
+  
+  if (tradingSystem.startTime) {
+    const runTime = Date.now() - tradingSystem.startTime;
+    console.log(`[deactivateTradingSystem] ⏱️ Время работы системы: ${Math.floor(runTime / 1000)} секунд (${Math.floor(runTime / 60000)} минут)`);
+  }
+
+  console.log(`[deactivateTradingSystem] 📊 Состояние системы перед отключением:`, {
+    isActive: tradingSystem.isActive,
+    selectedNews: tradingSystem.selectedNews?.event || 'отсутствует',
+    selectedAsset: tradingSystem.selectedAsset || 'отсутствует',
+    selectedPair: tradingSystem.selectedPair || 'отсутствует',
+    hasMonitoringInterval: !!tradingSystem.monitoringInterval,
+    hasAutoClickInterval: !!tradingSystem.autoClickInterval
+  });
+
   tradingSystem.isActive = false;
   
   if (tradingSystem.monitoringInterval) {
+    console.log(`[deactivateTradingSystem] 🔄 Останавливаю интервал мониторинга`);
     clearInterval(tradingSystem.monitoringInterval);
     tradingSystem.monitoringInterval = null;
+  } else {
+    console.log(`[deactivateTradingSystem] ⚠️ Интервал мониторинга не был активен`);
   }
 
+  console.log(`[deactivateTradingSystem] 🔄 Останавливаю авто-клик`);
   stopAutoClick();
 
   // Сохранение состояния
-  chrome.storage.local.set({
+  const stateToSave = {
     tradingSystemActive: false,
     tradingSystemState: null
-  });
+  };
+  
+  console.log(`[deactivateTradingSystem] 💾 Сохраняю состояние деактивации:`, stateToSave);
+  chrome.storage.local.set(stateToSave);
 
   // Уведомление об отключении
+  console.log(`[deactivateTradingSystem] 🔔 Отправляю уведомление о деактивации`);
   chrome.notifications.create({
     type: 'basic',
     iconUrl: 'icons/icon48.png',
@@ -353,7 +625,7 @@ function deactivateTradingSystem(reason = "Отключено вручную") {
     message: `Торговая система отключена: ${reason}`
   });
 
-  console.log(`Торговая система деактивирована: ${reason}`);
+  console.log(`[deactivateTradingSystem] ✅ ТОРГОВАЯ СИСТЕМА УСПЕШНО ДЕАКТИВИРОВАНА: ${reason}`);
 }
 
 // Функции авто-клика
