@@ -1,6 +1,6 @@
 // ============================================================================
 // DK NEWS HUNTERS - Debug Console JavaScript
-// Полный набор функций для тестирования и отладки расширения
+// Диагностика и тестирование через вызовы background.js функций
 // ============================================================================
 
 // Глобальный объект для всех debug функций
@@ -8,19 +8,56 @@ window.DK = {
     // Системная информация
     version: "1.52",
     initialized: false,
+    backgroundLogs: [],
+    logMonitorActive: false,
     
     // Инициализация debug консоли
     init() {
         this.log.info("🚀 DK Debug Console инициализирована");
         this.log.info(`📋 Версия расширения: ${this.version}`);
+        this.log.info("🔗 Подключение к background.js для тестирования...");
         this.initialized = true;
         this.updateStatus("Консоль готова", true);
         this.loadExtensionInfo();
+        
+        // Запускаем мониторинг логов background
+        this.startBackgroundLogMonitor();
         
         // Автоматическая диагностика при запуске
         setTimeout(() => {
             this.diagnose();
         }, 1000);
+    },
+
+    // Мониторинг логов background script
+    startBackgroundLogMonitor() {
+        if (this.logMonitorActive) return;
+        
+        this.logMonitorActive = true;
+        this.log.info("📡 Запуск мониторинга логов background script...");
+        
+        // Периодически проверяем новые логи (симуляция)
+        // В реальности Chrome DevTools лучше для этого, но добавим базовый мониторинг
+        setInterval(() => {
+            this.checkBackgroundActivity();
+        }, 5000);
+    },
+
+    async checkBackgroundActivity() {
+        try {
+            const response = await chrome.runtime.sendMessage({ action: "getTradingState" });
+            if (response && this.lastBackgroundCheck) {
+                const now = Date.now();
+                const timeDiff = now - this.lastBackgroundCheck;
+                
+                if (timeDiff > 10000 && response.isActive) {
+                    this.log.info(`🔄 Background активен: система работает ${Math.floor((now - response.state?.startTime) / 1000)}с`);
+                }
+            }
+            this.lastBackgroundCheck = Date.now();
+        } catch (error) {
+            // Игнорируем ошибки мониторинга
+        }
     }
 };
 
@@ -65,135 +102,119 @@ DK.log = {
 };
 
 // ============================================================================
-// МОДУЛЬ ТОРГОВОЙ СИСТЕМЫ
+// МОДУЛЬ ТОРГОВОЙ СИСТЕМЫ (через background.js)
 // ============================================================================
 DK.trading = {
     async activate() {
-        DK.log.info("🟢 Попытка активации торговой системы...");
+        DK.log.info("🟢 Активация торговой системы через background.js...");
         
         try {
-            // Получаем данные для активации
-            const storage = await chrome.storage.local.get(['selectedNews', 'selectedAsset', 'selectedPair']);
+            // Получаем или создаем тестовые данные
+            let { selectedNews, selectedAsset, selectedPair } = await chrome.storage.local.get(['selectedNews', 'selectedAsset', 'selectedPair']);
             
-            if (!storage.selectedNews || !storage.selectedAsset || !storage.selectedPair) {
-                DK.log.warn("⚠️ Не выбраны новость, актив или валютная пара");
-                
-                // Устанавливаем тестовые данные
+            if (!selectedNews || !selectedAsset || !selectedPair) {
                 const testData = {
-                    selectedNews: { event: "Test GDP Report", currency: "EUR" },
+                    selectedNews: { event: "DEBUG Test News", currency: "EUR" },
                     selectedAsset: "EUR", 
                     selectedPair: "EUR/USD"
                 };
                 
                 await chrome.storage.local.set(testData);
-                DK.log.info("📝 Установлены тестовые данные для активации");
+                selectedNews = testData.selectedNews;
+                selectedAsset = testData.selectedAsset;
+                selectedPair = testData.selectedPair;
+                
+                DK.log.info("📝 Созданы тестовые данные для активации");
             }
             
+            DK.log.info("🔗 Отправка команды активации в background.js...");
             const response = await chrome.runtime.sendMessage({
                 action: "activateTrading",
-                selectedNews: storage.selectedNews || { event: "Test GDP Report", currency: "EUR" },
-                selectedAsset: storage.selectedAsset || "EUR",
-                selectedPair: storage.selectedPair || "EUR/USD"
+                selectedNews: selectedNews,
+                selectedAsset: selectedAsset,
+                selectedPair: selectedPair
             });
             
             if (response?.success) {
-                DK.log.success("✅ Торговая система активирована");
+                DK.log.success("✅ Торговая система активирована через background");
                 DK.updateStatus("Торговая система активна", true);
+                
+                // Запускаем мониторинг активности
+                setTimeout(() => DK.monitor.startActivityMonitor(), 2000);
             } else {
-                DK.log.error("❌ Ошибка активации торговой системы");
+                DK.log.error("❌ Background вернул ошибку активации");
             }
         } catch (error) {
-            DK.log.error(`❌ Ошибка: ${error.message}`);
+            DK.log.error(`❌ Ошибка связи с background: ${error.message}`);
         }
     },
     
     async deactivate() {
-        DK.log.info("🔴 Деактивация торговой системы...");
+        DK.log.info("🔴 Деактивация через background.js...");
         
         try {
             const response = await chrome.runtime.sendMessage({ action: "deactivateTrading" });
             
             if (response?.success) {
-                DK.log.success("✅ Торговая система деактивирована");
+                DK.log.success("✅ Система деактивирована");
                 DK.updateStatus("Торговая система отключена", false);
+                DK.monitor.stopActivityMonitor();
             } else {
-                DK.log.error("❌ Ошибка деактивации торговой системы");
+                DK.log.error("❌ Ошибка деактивации");
             }
         } catch (error) {
-            DK.log.error(`❌ Ошибка: ${error.message}`);
+            DK.log.error(`❌ Ошибка связи: ${error.message}`);
         }
     },
     
     async getState() {
-        DK.log.info("📊 Получение состояния торговой системы...");
+        DK.log.info("📊 Запрос состояния у background.js...");
         
         try {
             const response = await chrome.runtime.sendMessage({ action: "getTradingState" });
             
             if (response) {
-                DK.log.info(`🔍 Активна: ${response.isActive ? 'Да' : 'Нет'}`);
-                DK.log.info(`📰 Выбранная новость: ${response.state?.selectedNews?.event || 'Не выбрана'}`);
-                DK.log.info(`💱 Актив: ${response.state?.selectedAsset || 'Не выбран'}`);
-                DK.log.info(`📈 Пара: ${response.state?.selectedPair || 'Не выбрана'}`);
-                
-                if (response.state?.startTime) {
-                    const uptime = Math.floor((Date.now() - response.state.startTime) / 1000);
-                    DK.log.info(`⏱️ Время работы: ${uptime} секунд`);
+                DK.log.info(`🔍 Система активна: ${response.isActive ? '✅ ДА' : '❌ НЕТ'}`);
+                if (response.isActive) {
+                    DK.log.info(`📰 Новость: ${response.state?.selectedNews?.event || 'неизвестно'}`);
+                    DK.log.info(`💱 Актив: ${response.state?.selectedAsset || 'неизвестно'}`);
+                    DK.log.info(`📈 Пара: ${response.state?.selectedPair || 'неизвестно'}`);
+                    
+                    if (response.state?.startTime) {
+                        const uptime = Math.floor((Date.now() - response.state.startTime) / 1000);
+                        DK.log.info(`⏱️ Время работы: ${uptime} секунд (${Math.floor(uptime/60)} мин)`);
+                    }
                 }
+                return response;
             } else {
-                DK.log.warn("⚠️ Не удалось получить состояние торговой системы");
+                DK.log.warn("⚠️ Background не отвечает на запрос состояния");
+                return null;
             }
         } catch (error) {
-            DK.log.error(`❌ Ошибка: ${error.message}`);
+            DK.log.error(`❌ Ошибка связи: ${error.message}`);
+            return null;
         }
     },
     
-    async buy() {
-        DK.log.info("📈 Выполнение ручной покупки (Call)...");
+    async testTrade(action = "buy") {
+        DK.log.info(`📈 ТЕСТ ТОРГОВЛИ: ${action.toUpperCase()} через background.js`);
+        DK.log.info(`⏰ Время: ${new Date().toLocaleTimeString()}`);
         
-        // Очищаем статистику обработанных новостей перед выполнением
-        DK.log.info("🧹 Очистка статистики обработанных новостей...");
         try {
-            const clearResponse = await chrome.runtime.sendMessage({ action: "clearProcessedNews" });
-            if (clearResponse?.success) {
-                DK.log.success("✅ Статистика обработанных новостей очищена");
-            } else {
-                DK.log.warn("⚠️ Не удалось очистить статистику через background script");
-            }
-        } catch (error) {
-            DK.log.error(`❌ Ошибка при очистке статистики: ${error.message}`);
-        }
-        
-        await this.executeTrade("buy");
-    },
-    
-    async sell() {
-        DK.log.info("📉 Выполнение ручной продажи (Put)...");
-        
-        // Очищаем статистику обработанных новостей перед выполнением
-        DK.log.info("🧹 Очистка статистики обработанных новостей...");
-        try {
-            const clearResponse = await chrome.runtime.sendMessage({ action: "clearProcessedNews" });
-            if (clearResponse?.success) {
-                DK.log.success("✅ Статистика обработанных новостей очищена");
-            } else {
-                DK.log.warn("⚠️ Не удалось очистить статистику через background script");
-            }
-        } catch (error) {
-            DK.log.error(`❌ Ошибка при очистке статистики: ${error.message}`);
-        }
-        
-        await this.executeTrade("sell");
-    },
-    
-    async executeTrade(action) {
-        try {
+            // Очищаем историю обработанных новостей
+            await chrome.runtime.sendMessage({ action: "clearProcessedNews" });
+            
+            // Создаем уникальную тестовую новость
             const testNews = {
-                event: "Manual Trade Test",
+                event: `DEBUG_Trade_Test_${Date.now()}`,
                 currency: "EUR",
                 actual: "1.5%",
-                actualType: action === "buy" ? "GFP" : "RFP"
+                actualType: action === "buy" ? "GFP" : "RFP",
+                time: new Date().toLocaleTimeString()
             };
+            
+            DK.log.info("🧪 Созданная тестовая новость:", testNews);
+            DK.log.info("🔗 Отправка команды executeTrade в background...");
             
             const response = await chrome.runtime.sendMessage({
                 action: "executeTrade",
@@ -202,22 +223,290 @@ DK.trading = {
             });
             
             if (response?.success) {
-                DK.log.success(`✅ ${action === "buy" ? "Покупка" : "Продажа"} выполнена успешно`);
+                DK.log.success(`✅ ${action.toUpperCase()} выполнена успешно!`);
             } else {
-                DK.log.error(`❌ Ошибка при выполнении ${action === "buy" ? "покупки" : "продажи"}`);
+                DK.log.error(`❌ ${action.toUpperCase()} не выполнена`);
+                DK.log.error("💡 Проверьте логи background в DevTools для подробностей");
             }
+            
+            return response?.success || false;
         } catch (error) {
-            DK.log.error(`❌ Ошибка: ${error.message}`);
+            DK.log.error(`❌ Ошибка тестовой торговли: ${error.message}`);
+            return false;
         }
     }
 };
 
 // ============================================================================
-// МОДУЛЬ РАБОТЫ С НОВОСТЯМИ
+// МОДУЛЬ МОНИТОРИНГА BACKGROUND (новый)
+// ============================================================================
+DK.monitor = {
+    activityInterval: null,
+    isMonitoring: false,
+    
+    startActivityMonitor() {
+        if (this.isMonitoring) return;
+        
+        this.isMonitoring = true;
+        DK.log.info("📡 Запуск мониторинга активности background...");
+        
+        this.activityInterval = setInterval(async () => {
+            try {
+                const state = await DK.trading.getState();
+                if (state?.isActive) {
+                    const uptime = Math.floor((Date.now() - state.state.startTime) / 1000);
+                    if (uptime % 30 === 0) { // Каждые 30 секунд
+                        DK.log.info(`🔄 Система работает: ${uptime}с, мониторинг новости: ${state.state.selectedNews?.event}`);
+                    }
+                }
+            } catch (error) {
+                // Игнорируем ошибки мониторинга
+            }
+        }, 5000);
+    },
+    
+    stopActivityMonitor() {
+        if (this.activityInterval) {
+            clearInterval(this.activityInterval);
+            this.activityInterval = null;
+            this.isMonitoring = false;
+            DK.log.info("⏹️ Мониторинг активности остановлен");
+        }
+    },
+    
+    async getBackgroundLogs() {
+        DK.log.info("📋 Получение логов background недоступно через API");
+        DK.log.info("💡 Используйте Chrome DevTools -> Extensions -> Background Page для просмотра логов background");
+        DK.log.info("💡 Или откройте chrome://extensions/?id=" + chrome.runtime.id);
+    }
+};
+
+// ============================================================================
+// МОДУЛЬ БЫСТРОГО ТЕСТИРОВАНИЯ (новый)
+// ============================================================================
+DK.quick = {
+    async testBuy() {
+        DK.log.info("⚡ БЫСТРЫЙ ТЕСТ: Покупка (CALL)");
+        const result = await DK.trading.testTrade("buy");
+        return result;
+    },
+    
+    async testSell() {
+        DK.log.info("⚡ БЫСТРЫЙ ТЕСТ: Продажа (PUT)");
+        const result = await DK.trading.testTrade("sell");
+        return result;
+    },
+    
+    async testFullCycle() {
+        DK.log.info("⚡ БЫСТРЫЙ ПОЛНЫЙ ЦИКЛ");
+        
+        try {
+            // 1. Сброс системы
+            await chrome.runtime.sendMessage({ action: "resetTradingSystem" });
+            await this.delay(500);
+            
+            // 2. Создание тестовых данных
+            await chrome.storage.local.set({
+                selectedNews: { event: "Quick Test GDP", currency: "EUR" },
+                selectedAsset: "EUR",
+                selectedPair: "EUR/USD"
+            });
+            
+            // 3. Активация
+            await DK.trading.activate();
+            await this.delay(2000);
+            
+            // 4. Тест торговли
+            const success = await DK.trading.testTrade("buy");
+            
+            DK.log.info(`⚡ Быстрый цикл ${success ? 'УСПЕШЕН' : 'НЕУДАЧЕН'}`);
+            return success;
+        } catch (error) {
+            DK.log.error(`❌ Ошибка быстрого цикла: ${error.message}`);
+            return false;
+        }
+    },
+    
+    delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+};
+
+// ============================================================================
+// МОДУЛЬ ДИАГНОСТИКИ ТОРГОВЛИ (новый) 
+// ============================================================================
+DK.debug = {
+    async testBrokerConnection() {
+        DK.log.info("🏦 ТЕСТ ПОДКЛЮЧЕНИЯ К БРОКЕРУ");
+        
+        try {
+            const tabs = await chrome.tabs.query({ url: "*://*/*" });
+            let brokerFound = false;
+            let brokerTabs = [];
+            
+            for (const tab of tabs) {
+                if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+                    try {
+                        const results = await chrome.scripting.executeScript({
+                            target: { tabId: tab.id },
+                            func: () => {
+                                // Используем ту же логику, что в background.js
+                                const themeColorMeta = document.querySelector('meta[name="theme-color"][content="#1F1F23"]');
+                                const colorSchemesMeta = document.querySelector('meta[name="supported-color-schemes"][content="light dark"]');
+                                if (themeColorMeta && colorSchemesMeta) {
+                                    return { isBroker: true, url: window.location.href };
+                                }
+                                return { isBroker: false, url: window.location.href };
+                            }
+                        });
+                        
+                        if (results && results[0] && results[0].result && results[0].result.isBroker) {
+                            brokerFound = true;
+                            brokerTabs.push({
+                                id: tab.id,
+                                title: tab.title,
+                                url: results[0].result.url
+                            });
+                        }
+                    } catch (error) {
+                        // Игнорируем недоступные вкладки
+                    }
+                }
+            }
+            
+            if (brokerFound) {
+                DK.log.success(`✅ Найдено брокерских вкладок: ${brokerTabs.length}`);
+                brokerTabs.forEach(tab => {
+                    DK.log.info(`  🏦 ${tab.title} (ID: ${tab.id})`);
+                    DK.log.info(`     ${tab.url}`);
+                });
+            } else {
+                DK.log.error("❌ Брокерские вкладки не найдены!");
+                DK.log.error("💡 Откройте брокерскую платформу в браузере");
+            }
+            
+            return brokerFound;
+        } catch (error) {
+            DK.log.error(`❌ Ошибка теста подключения: ${error.message}`);
+            return false;
+        }
+    },
+    
+    async testTradingButtons() {
+        DK.log.info("🎯 ТЕСТ ТОРГОВЫХ КНОПОК");
+        
+        try {
+            const tabs = await chrome.tabs.query({ url: "*://*/*" });
+            let buttonTestResults = [];
+            
+            for (const tab of tabs) {
+                if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+                    try {
+                        const results = await chrome.scripting.executeScript({
+                            target: { tabId: tab.id },
+                            func: () => {
+                                // Проверяем наличие торговых кнопок
+                                const callButton = document.querySelector('.action-high-low.button-call-wrap a.btn.btn-call');
+                                const putButton = document.querySelector('.action-high-low.button-put-wrap a.btn.btn-put');
+                                
+                                const result = {
+                                    url: window.location.href,
+                                    callButton: {
+                                        found: !!callButton,
+                                        visible: callButton ? callButton.offsetParent !== null : false,
+                                        disabled: callButton ? callButton.disabled : null,
+                                        classes: callButton ? callButton.className : null
+                                    },
+                                    putButton: {
+                                        found: !!putButton,
+                                        visible: putButton ? putButton.offsetParent !== null : false,
+                                        disabled: putButton ? putButton.disabled : null,
+                                        classes: putButton ? putButton.className : null
+                                    }
+                                };
+                                
+                                return result;
+                            }
+                        });
+                        
+                        if (results && results[0] && results[0].result) {
+                            const result = results[0].result;
+                            if (result.callButton.found || result.putButton.found) {
+                                buttonTestResults.push({
+                                    tabId: tab.id,
+                                    title: tab.title,
+                                    result: result
+                                });
+                            }
+                        }
+                    } catch (error) {
+                        // Игнорируем недоступные вкладки
+                    }
+                }
+            }
+            
+            if (buttonTestResults.length > 0) {
+                DK.log.success(`✅ Найдены торговые кнопки на ${buttonTestResults.length} вкладках:`);
+                buttonTestResults.forEach(tab => {
+                    DK.log.info(`  📊 ${tab.title}:`);
+                    DK.log.info(`    🟢 CALL кнопка: ${tab.result.callButton.found ? '✅ найдена' : '❌ не найдена'} ${tab.result.callButton.visible ? '(видима)' : '(скрыта)'}`);
+                    DK.log.info(`    🔴 PUT кнопка: ${tab.result.putButton.found ? '✅ найдена' : '❌ не найдена'} ${tab.result.putButton.visible ? '(видима)' : '(скрыта)'}`);
+                });
+            } else {
+                DK.log.error("❌ Торговые кнопки не найдены ни на одной вкладке!");
+                DK.log.error("💡 Убедитесь, что торговая платформа открыта и загружена");
+            }
+            
+            return buttonTestResults.length > 0;
+        } catch (error) {
+            DK.log.error(`❌ Ошибка теста кнопок: ${error.message}`);
+            return false;
+        }
+    },
+    
+    async simulateBackgroundDiagnose() {
+        DK.log.info("🔬 СИМУЛЯЦИЯ ДИАГНОСТИКИ BACKGROUND");
+        
+        try {
+            // Тест 1: Связь с background
+            DK.log.info("1️⃣ Тест связи с background...");
+            const stateResponse = await chrome.runtime.sendMessage({ action: "getTradingState" });
+            const bgConnection = !!stateResponse;
+            DK.log.info(`   ${bgConnection ? '✅' : '❌'} Background отвечает: ${bgConnection ? 'ДА' : 'НЕТ'}`);
+            
+            // Тест 2: Подключение к брокеру  
+            DK.log.info("2️⃣ Тест подключения к брокеру...");
+            const brokerConnection = await this.testBrokerConnection();
+            
+            // Тест 3: Торговые кнопки
+            DK.log.info("3️⃣ Тест торговых кнопок...");
+            const buttonTest = await this.testTradingButtons();
+            
+            // Общий результат
+            const allPassed = bgConnection && brokerConnection && buttonTest;
+            DK.log.info(`🎯 ОБЩИЙ РЕЗУЛЬТАТ: ${allPassed ? '✅ ВСЕ ТЕСТЫ ПРОШЛИ' : '❌ ЕСТЬ ПРОБЛЕМЫ'}`);
+            
+            if (!allPassed) {
+                DK.log.info("💡 Рекомендации:");
+                if (!bgConnection) DK.log.info("   - Перезагрузите расширение");
+                if (!brokerConnection) DK.log.info("   - Откройте брокерскую платформу");
+                if (!buttonTest) DK.log.info("   - Проверьте загрузку торговых элементов на платформе");
+            }
+            
+            return allPassed;
+        } catch (error) {
+            DK.log.error(`❌ Ошибка диагностики: ${error.message}`);
+            return false;
+        }
+    }
+};
+
+// ============================================================================
+// МОДУЛЬ РАБОТЫ С НОВОСТЯМИ (улучшенный)
 // ============================================================================
 DK.news = {
     async update() {
-        DK.log.info("🔄 Обновление новостей...");
+        DK.log.info(" Обновление новостей...");
         
         try {
             const response = await chrome.runtime.sendMessage({ action: "openInvesting" });
@@ -390,8 +679,9 @@ DK.test = {
     async simulateNews() {
         const currency = document.getElementById('testCurrency').value;
         const factType = document.getElementById('testFactType').value;
+        const selectedPair = document.getElementById('testPair').value;
         
-        DK.log.info(`🎲 Симуляция новости: ${currency} ${factType}`);
+        DK.log.info(`🎲 Симуляция новости: ${currency} ${factType} для пары ${selectedPair}`);
         
         // Создаем уникальную новость с timestamp для избежания дублирования
         const timestamp = Date.now();
@@ -416,12 +706,13 @@ DK.test = {
                     debugId: testNews.debugId 
                 },
                 selectedAsset: currency,
-                selectedPair: this.getTestPair(currency)
+                selectedPair: selectedPair
             });
             
             DK.log.success("✅ Тестовая новость создана и выбрана");
             DK.log.info(`📰 Событие: ${testNews.event}`);
             DK.log.info(`💱 Валюта: ${testNews.currency}`);
+            DK.log.info(`📈 Валютная пара: ${selectedPair}`);
             DK.log.info(`📊 Факт: ${testNews.actual} (${testNews.actualType})`);
             DK.log.info(`🔢 Debug ID: ${testNews.debugId}`);
         } catch (error) {
@@ -458,13 +749,36 @@ DK.test = {
             await DK.trading.getState();
             await this.delay(1000);
             
-            // 4. Имитируем торговлю
-            DK.log.info("💰 Этап 4: Имитация торговой операции");
-            await DK.trading.buy();
-            await this.delay(2000);
+            // 4. Анализируем новость и определяем направление торговли
+            DK.log.info("🔍 Этап 4: Анализ новости для определения направления торговли");
+            const currency = document.getElementById('testCurrency').value;
+            const factType = document.getElementById('testFactType').value;
+            const selectedPair = document.getElementById('testPair').value;
             
-            // 5. Деактивируем систему
-            DK.log.info("🔴 Этап 5: Деактивация системы");
+            const tradeDirection = this.calculateTradeDirection(currency, factType, selectedPair);
+            
+            if (tradeDirection === 'none') {
+                DK.log.warn("⚠️ Торговля не рекомендуется");
+                DK.log.info(`💡 Логика: ${this.getTradeLogicExplanation(currency, factType, selectedPair, tradeDirection)}`);
+                
+                // 5. Этап пропускается - торговли не будет
+                DK.log.info("🚫 Этап 5: Торговля пропущена (нейтральная новость)");
+            } else {
+                DK.log.info(`📈 Рекомендуемое направление торговли: ${tradeDirection === 'buy' ? 'CALL (вверх)' : 'PUT (вниз)'}`);
+                DK.log.info(`💡 Логика: ${this.getTradeLogicExplanation(currency, factType, selectedPair, tradeDirection)}`);
+                
+            // 5. Имитируем торговлю с правильным направлением
+                DK.log.info("💰 Этап 5: Имитация торговой операции");
+                if (tradeDirection === 'buy') {
+                    await DK.trading.testTrade("buy");
+                } else {
+                    await DK.trading.testTrade("sell");
+                }
+                await this.delay(2000);
+            }
+            
+            // 6. Деактивируем систему
+            DK.log.info("🔴 Этап 6: Деактивация системы");
             await DK.trading.deactivate();
             
             DK.log.success("✅ Полный цикл торговли завершен");
@@ -556,6 +870,92 @@ DK.test = {
     
     delay(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    },
+    
+    calculateTradeDirection(currency, factType, selectedPair) {
+        // Для BFP (черный факт) не открываем сделку
+        if (factType === 'BFP') {
+            return 'none'; // Не торгуем при нейтральных новостях
+        }
+        
+        // Определяем базовую и котируемую валюты
+        const [baseCurrency, quoteCurrency] = selectedPair.split('/');
+        
+        // Определяем влияние новости на пару
+        let direction;
+        
+        if (currency === baseCurrency) {
+            // Новость по базовой валюте
+            switch (factType) {
+                case 'GFP': // Позитивная новость - базовая валюта укрепляется
+                    direction = 'buy'; // CALL
+                    break;
+                case 'RFP': // Негативная новость - базовая валюта ослабевает
+                    direction = 'sell'; // PUT
+                    break;
+                default:
+                    direction = 'none';
+            }
+        } else if (currency === quoteCurrency) {
+            // Новость по котируемой валюте - обратная логика
+            switch (factType) {
+                case 'GFP': // Позитивная новость по котируемой валюте - пара падает
+                    direction = 'sell'; // PUT
+                    break;
+                case 'RFP': // Негативная новость по котируемой валюте - пара растет
+                    direction = 'buy'; // CALL
+                    break;
+                default:
+                    direction = 'none';
+            }
+        } else {
+            // Новость по валюте, не входящей в пару - влияние косвенное или отсутствует
+            // Используем общие рыночные тенденции
+            switch (factType) {
+                case 'GFP':
+                    direction = 'buy'; // Позитивные новости обычно поддерживают риск
+                    break;
+                case 'RFP':
+                    direction = 'sell'; // Негативные новости снижают аппетит к риску
+                    break;
+                default:
+                    direction = 'none';
+            }
+        }
+        
+        return direction;
+    },
+    
+    getTradeLogicExplanation(currency, factType, selectedPair, direction) {
+        const [baseCurrency, quoteCurrency] = selectedPair.split('/');
+        const factTypeNames = {
+            'GFP': 'позитивный (зеленый)',
+            'RFP': 'негативный (красный)', 
+            'BFP': 'нейтральный (черный)'
+        };
+        
+        const factName = factTypeNames[factType] || factType;
+        
+        // Для BFP или когда direction === 'none'
+        if (direction === 'none' || factType === 'BFP') {
+            if (currency === baseCurrency) {
+                return `${factName} факт по ${currency} (базовая валюта в ${selectedPair}) → нейтральное влияние на валюту → нет четкого сигнала для торговли → торговля не рекомендуется`;
+            } else if (currency === quoteCurrency) {
+                return `${factName} факт по ${currency} (котируемая валюта в ${selectedPair}) → нейтральное влияние на валюту → нет четкого сигнала для торговли → торговля не рекомендуется`;
+            } else {
+                return `${factName} факт по ${currency} (не входит в пару ${selectedPair}) → нейтральная новость без торгового сигнала → торговля не рекомендуется`;
+            }
+        }
+        
+        const directionName = direction === 'buy' ? 'CALL (вверх)' : 'PUT (вниз)';
+        
+        if (currency === baseCurrency) {
+            return `${factName} факт по ${currency} (базовая валюта в ${selectedPair}) → ${currency} ${factType === 'GFP' ? 'укрепляется' : 'ослабевает'} → пара ${selectedPair} идет ${direction === 'buy' ? 'вверх' : 'вниз'} → ${directionName}`;
+        } else if (currency === quoteCurrency) {
+            return `${factName} факт по ${currency} (котируемая валюта в ${selectedPair}) → ${currency} ${factType === 'GFP' ? 'укрепляется' : 'ослабевает'} → пара ${selectedPair} идет ${direction === 'buy' ? 'вверх' : 'вниз'} (обратная реакция) → ${directionName}`;
+        } else {
+            return `${factName} факт по ${currency} (не входит в пару ${selectedPair}) → косвенное влияние через общие рыночные настроения → ${directionName}`;
+        }
     }
 };
 
@@ -832,6 +1232,92 @@ function toggleAccordion(targetId) {
     }
 }
 
+function updateCurrencyPairs(selectedCurrency) {
+    const pairSelect = document.getElementById('testPair');
+    if (!pairSelect) return;
+
+    // Определяем релевантные пары для выбранной валюты
+    const currencyPairs = {
+        "EUR": [
+            { value: "EUR/USD", text: "EUR/USD" },
+            { value: "EUR/GBP", text: "EUR/GBP" },
+            { value: "EUR/JPY", text: "EUR/JPY" },
+            { value: "EUR/CHF", text: "EUR/CHF" }
+        ],
+        "USD": [
+            { value: "EUR/USD", text: "EUR/USD" },
+            { value: "USD/JPY", text: "USD/JPY" },
+            { value: "GBP/USD", text: "GBP/USD" },
+            { value: "AUD/USD", text: "AUD/USD" },
+            { value: "USD/CAD", text: "USD/CAD" },
+            { value: "USD/CHF", text: "USD/CHF" },
+            { value: "NZD/USD", text: "NZD/USD" }
+        ],
+        "GBP": [
+            { value: "GBP/USD", text: "GBP/USD" },
+            { value: "EUR/GBP", text: "EUR/GBP" },
+            { value: "GBP/JPY", text: "GBP/JPY" },
+            { value: "GBP/CHF", text: "GBP/CHF" }
+        ],
+        "JPY": [
+            { value: "USD/JPY", text: "USD/JPY" },
+            { value: "EUR/JPY", text: "EUR/JPY" },
+            { value: "GBP/JPY", text: "GBP/JPY" },
+            { value: "AUD/JPY", text: "AUD/JPY" },
+            { value: "CAD/JPY", text: "CAD/JPY" }
+        ],
+        "AUD": [
+            { value: "AUD/USD", text: "AUD/USD" },
+            { value: "AUD/JPY", text: "AUD/JPY" },
+            { value: "AUD/CAD", text: "AUD/CAD" }
+        ],
+        "CAD": [
+            { value: "USD/CAD", text: "USD/CAD" },
+            { value: "CAD/JPY", text: "CAD/JPY" },
+            { value: "AUD/CAD", text: "AUD/CAD" }
+        ],
+        "CHF": [
+            { value: "USD/CHF", text: "USD/CHF" },
+            { value: "EUR/CHF", text: "EUR/CHF" },
+            { value: "GBP/CHF", text: "GBP/CHF" }
+        ]
+    };
+
+    // Получаем пары для выбранной валюты или все пары по умолчанию
+    const pairs = currencyPairs[selectedCurrency] || [
+        { value: "EUR/USD", text: "EUR/USD" },
+        { value: "USD/JPY", text: "USD/JPY" },
+        { value: "GBP/USD", text: "GBP/USD" },
+        { value: "USD/CAD", text: "USD/CAD" },
+        { value: "AUD/USD", text: "AUD/USD" },
+        { value: "USD/CHF", text: "USD/CHF" }
+    ];
+
+    // Сохраняем текущий выбор
+    const currentValue = pairSelect.value;
+
+    // Очищаем и заполняем список
+    pairSelect.innerHTML = '';
+    pairs.forEach(pair => {
+        const option = document.createElement('option');
+        option.value = pair.value;
+        option.textContent = pair.text;
+        pairSelect.appendChild(option);
+    });
+
+    // Восстанавливаем выбор или выбираем первую подходящую пару
+    if (pairs.some(pair => pair.value === currentValue)) {
+        pairSelect.value = currentValue;
+    } else {
+        pairSelect.value = pairs[0].value;
+    }
+
+    // Логируем изменение
+    if (window.DK && DK.log) {
+        DK.log.info(`💱 Валютные пары обновлены для ${selectedCurrency}: ${pairs.length} доступных пар`);
+    }
+}
+
 // ============================================================================
 // ОБРАБОТЧИКИ СОБЫТИЙ
 // ============================================================================
@@ -851,6 +1337,14 @@ function setupEventListeners() {
             handleAction(action);
         });
     });
+
+    // Обработчик изменения валюты для автоматического обновления пар
+    const currencySelect = document.getElementById('testCurrency');
+    if (currencySelect) {
+        currencySelect.addEventListener('change', function() {
+            updateCurrencyPairs(this.value);
+        });
+    }
 }
 
 function handleAction(action) {
@@ -866,11 +1360,44 @@ function handleAction(action) {
             case 'trading-getState':
                 DK.trading.getState();
                 break;
-            case 'trading-buy':
-                DK.trading.buy();
+            case 'trading-testBuy':
+                DK.trading.testTrade("buy");
                 break;
-            case 'trading-sell':
-                DK.trading.sell();
+            case 'trading-testSell':
+                DK.trading.testTrade("sell");
+                break;
+                
+            // Быстрое тестирование (новый раздел)
+            case 'quick-testBuy':
+                DK.quick.testBuy();
+                break;
+            case 'quick-testSell':
+                DK.quick.testSell();
+                break;
+            case 'quick-fullCycle':
+                DK.quick.testFullCycle();
+                break;
+                
+            // Диагностика торговли (новый раздел)
+            case 'debug-brokerConnection':
+                DK.debug.testBrokerConnection();
+                break;
+            case 'debug-tradingButtons':
+                DK.debug.testTradingButtons();
+                break;
+            case 'debug-backgroundDiagnose':
+                DK.debug.simulateBackgroundDiagnose();
+                break;
+                
+            // Мониторинг (новый раздел)
+            case 'monitor-start':
+                DK.monitor.startActivityMonitor();
+                break;
+            case 'monitor-stop':
+                DK.monitor.stopActivityMonitor();
+                break;
+            case 'monitor-backgroundLogs':
+                DK.monitor.getBackgroundLogs();
                 break;
             
             // Тестирование
@@ -970,6 +1497,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Настраиваем обработчики событий
     setupEventListeners();
+    
+    // Инициализируем валютные пары для выбранной валюты по умолчанию
+    setTimeout(() => {
+        const defaultCurrency = document.getElementById('testCurrency')?.value || 'EUR';
+        updateCurrencyPairs(defaultCurrency);
+    }, 100);
     
     // Открываем первый аккордеон по умолчанию
     setTimeout(() => {

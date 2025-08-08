@@ -121,34 +121,6 @@ function checkBrokerMeta() {
       console.log('[DK] Найдены специфичные мета-теги брокера');
       return true;
     }
-    
-    // 2. Проверка Open Graph для брокера/торговли
-    const ogTitle = document.querySelector('meta[property="og:title"]');
-    const ogSiteName = document.querySelector('meta[property="og:site_name"]');
-    const ogDescription = document.querySelector('meta[property="og:description"]');
-    
-    if (ogTitle && (ogTitle.content.toLowerCase().includes('trading') || ogTitle.content.toLowerCase().includes('broker'))) {
-      console.log('[DK] Найден брокерский сайт по og:title');
-      return true;
-    }
-    
-    if (ogSiteName && (ogSiteName.content.toLowerCase().includes('trading') || ogSiteName.content.toLowerCase().includes('broker'))) {
-      console.log('[DK] Найден брокерский сайт по og:site_name');
-      return true;
-    }
-    
-    if (ogDescription && (ogDescription.content.toLowerCase().includes('trading') || ogDescription.content.toLowerCase().includes('broker'))) {
-      console.log('[DK] Найден брокерский сайт по og:description');
-      return true;
-    }
-    
-    // 3. Проверка наличия элемента с BID (.info__id)
-    const bidElement = document.querySelector('.info__id');
-    if (bidElement) {
-      console.log('[DK] Найден элемент с BID на странице');
-      return true;
-    }
-    
     console.log('[DK] Сайт не определен как брокерский');
     return false;
   } catch (error) {
@@ -684,8 +656,11 @@ async function syncTradingSystemState() {
       const toggle = document.getElementById("autoClickToggle");
       if (toggle) {
         toggle.checked = tradingSystemActive;
-        console.log('[Popup] Переключатель установлен в:', tradingSystemActive);
+        console.log('[Popup] Переключатель синхронизирован с background:', tradingSystemActive);
       }
+      
+      // Сохраняем актуальное состояние в storage
+      chrome.storage.local.set({ tradingSystemActive: tradingSystemActive });
       
       if (tradingSystemActive) {
         document.getElementById("statusBar").textContent = "Торговая система активна";
@@ -704,7 +679,7 @@ async function syncTradingSystemState() {
  */
 function initializeStoredData() {
   chrome.storage.local.get(
-    ["newsData", "selectedNews", "selectedAsset", "selectedPair", "processedNews"], 
+    ["newsData", "selectedNews", "selectedAsset", "selectedPair", "processedNews", "tradingSystemActive"], 
     (result) => {
       if (result.processedNews) {
         processedNews = result.processedNews;
@@ -723,6 +698,25 @@ function initializeStoredData() {
         const pairSelect = document.getElementById("pairSelect");
         if (pairSelect) {
           pairSelect.value = selectedPair;
+        }
+      }
+
+      // Устанавливаем состояние переключателя сразу из storage
+      if (typeof result.tradingSystemActive === 'boolean') {
+        tradingSystemActive = result.tradingSystemActive;
+        const toggle = document.getElementById("autoClickToggle");
+        if (toggle) {
+          toggle.checked = tradingSystemActive;
+          console.log('[Popup] Переключатель установлен из storage:', tradingSystemActive);
+          
+          // Добавляем анимацию только после установки начального состояния
+          setTimeout(() => {
+            const slider = document.querySelector('.toggle-slider');
+            if (slider) {
+              slider.classList.add('animated');
+              console.log('[Popup] Анимация переключателя активирована');
+            }
+          }, 100);
         }
       }
     }
@@ -846,6 +840,8 @@ document.getElementById("autoClickToggle")?.addEventListener("change", function(
       
       if (response?.success) {
         tradingSystemActive = true;
+        // Сохраняем состояние в storage
+        chrome.storage.local.set({ tradingSystemActive: true });
         document.getElementById("statusBar").textContent = "Торговая система активирована";
       } else {
         e.target.checked = false;
@@ -858,6 +854,8 @@ document.getElementById("autoClickToggle")?.addEventListener("change", function(
     chrome.runtime.sendMessage({ action: "deactivateTrading" }, (response) => {
       if (response?.success) {
         tradingSystemActive = false;
+        // Сохраняем состояние в storage
+        chrome.storage.local.set({ tradingSystemActive: false });
         document.getElementById("statusBar").textContent = "Торговая система отключена";
       } else {
         document.getElementById("statusBar").textContent = "Ошибка отключения торговой системы";
@@ -896,8 +894,12 @@ document.getElementById("statusBar")?.addEventListener("click", () => {
 window.addEventListener('load', () => {
   console.log('[Popup] Popup загружен, инициализация...');
   
+  // Сначала инициализируем данные из storage (включая состояние переключателя)
+  initializeStoredData();
+  
   testBackgroundConnection();
   
+  // Синхронизируемся с background script после установки начального состояния
   setTimeout(() => {
     syncTradingSystemState();
   }, 500);
@@ -924,11 +926,8 @@ chrome.storage.local.get("authToken", async (result) => {
     if (!isValid) {
       return;
     }
+    updateExtension();
   } else {
     showLogin();
   }
 });
-
-// Загрузка данных при открытии popup (без периодических обновлений)
-initializeStoredData();
-updateExtension();

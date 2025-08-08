@@ -73,8 +73,8 @@
       right: 0;
       bottom: 0;
       background-color: #f44336;
-      transition: .4s;
       border-radius: 24px;
+      /* transition убрана - добавится через JS после инициализации */
     }
 
     .toggle-slider:before {
@@ -85,8 +85,16 @@
       left: 4px;
       bottom: 4px;
       background-color: white;
-      transition: .4s;
       border-radius: 50%;
+      /* transition убрана - добавится через JS после инициализации */
+    }
+
+    .toggle-slider.animated {
+      transition: .4s;
+    }
+
+    .toggle-slider.animated:before {
+      transition: .4s;
     }
 
     input:checked + .toggle-slider {

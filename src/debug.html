@@ -304,12 +304,12 @@
 
                 <div class="accordion">
                     <div class="accordion-header" data-target="manual-trading">
-                        🖱️ Ручная торговля
+                        🖱️ Тестовая торговля
                     </div>
                     <div class="accordion-content" id="manual-trading">
                         <div class="button-group">
-                            <button class="btn btn-success" data-action="trading-buy">📈 Купить (Call)</button>
-                            <button class="btn btn-danger" data-action="trading-sell">📉 Продать (Put)</button>
+                            <button class="btn btn-success" data-action="trading-testBuy">📈 ТЕСТ: Купить (Call)</button>
+                            <button class="btn btn-danger" data-action="trading-testSell">📉 ТЕСТ: Продать (Put)</button>
                         </div>
                     </div>
                 </div>
@@ -332,6 +332,26 @@
                             </select>
                         </div>
                         <div class="form-group">
+                            <label>Валютная пара:</label>
+                            <select class="form-control" id="testPair">
+                                <option value="EUR/USD">EUR/USD</option>
+                                <option value="USD/JPY">USD/JPY</option>
+                                <option value="GBP/USD">GBP/USD</option>
+                                <option value="USD/CAD">USD/CAD</option>
+                                <option value="AUD/USD">AUD/USD</option>
+                                <option value="USD/CHF">USD/CHF</option>
+                                <option value="EUR/GBP">EUR/GBP</option>
+                                <option value="EUR/JPY">EUR/JPY</option>
+                                <option value="GBP/JPY">GBP/JPY</option>
+                                <option value="AUD/JPY">AUD/JPY</option>
+                                <option value="NZD/USD">NZD/USD</option>
+                                <option value="EUR/CHF">EUR/CHF</option>
+                                <option value="GBP/CHF">GBP/CHF</option>
+                                <option value="CAD/JPY">CAD/JPY</option>
+                                <option value="AUD/CAD">AUD/CAD</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
                             <label>Тип факта:</label>
                             <select class="form-control" id="testFactType">
                                 <option value="GFP">Зеленый (GFP)</option>
@@ -342,6 +362,42 @@
                         <div class="button-group">
                             <button class="btn btn-primary" data-action="test-simulateNews">🎲 Симуляция новости</button>
                             <button class="btn btn-warning" data-action="test-tradingCycle">🔄 Полный цикл торговли</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Быстрое тестирование (НОВОЕ) -->
+            <div class="section">
+                <h2>⚡ Быстрое тестирование</h2>
+                
+                <div class="accordion">
+                    <div class="accordion-header" data-target="quick-tests">
+                        🚀 Мгновенные тесты
+                    </div>
+                    <div class="accordion-content" id="quick-tests">
+                        <div class="button-group">
+                            <button class="btn btn-success" data-action="quick-testBuy">⚡ Быстрый CALL</button>
+                            <button class="btn btn-danger" data-action="quick-testSell">⚡ Быстрый PUT</button>
+                            <button class="btn btn-warning" data-action="quick-fullCycle">🔄 Полный цикл</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Диагностика торговли (НОВОЕ) -->
+            <div class="section">
+                <h2>🔬 Диагностика торговли</h2>
+                
+                <div class="accordion">
+                    <div class="accordion-header" data-target="trade-diagnostics">
+                        🏥 Диагностика торговых проблем
+                    </div>
+                    <div class="accordion-content" id="trade-diagnostics">
+                        <div class="button-group">
+                            <button class="btn btn-primary" data-action="debug-backgroundDiagnose">🔬 Полная диагностика</button>
+                            <button class="btn btn-info" data-action="debug-brokerConnection">🏦 Тест брокера</button>
+                            <button class="btn btn-success" data-action="debug-tradingButtons">🎯 Тест кнопок</button>
                         </div>
                     </div>
                 </div>
@@ -396,6 +452,24 @@
                 </div>
             </div>
 
+            <!-- Мониторинг Background (НОВОЕ) -->
+            <div class="section">
+                <h2>📡 Мониторинг Background</h2>
+                
+                <div class="accordion">
+                    <div class="accordion-header" data-target="background-monitor">
+                        🔄 Мониторинг активности
+                    </div>
+                    <div class="accordion-content" id="background-monitor">
+                        <div class="button-group">
+                            <button class="btn btn-success" data-action="monitor-start">📡 Запустить мониторинг</button>
+                            <button class="btn btn-danger" data-action="monitor-stop">⏹️ Остановить мониторинг</button>
+                            <button class="btn btn-info" data-action="monitor-backgroundLogs">📋 Логи background</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Системная диагностика -->
             <div class="section">
                 <h2>🔧 Системная диагностика</h2>
@@ -410,6 +484,7 @@
                             <button class="btn btn-info" data-action="system-status">📊 Статус компонентов</button>
                             <button class="btn btn-warning" data-action="test-backgroundConnection">🔗 Тест связи с background</button>
                             <button class="btn btn-danger" data-action="system-reset">🔄 Полный сброс</button>
+                            <button class="btn btn-warning" data-action="system-resetTrading">⚙️ Сброс торговой системы</button>
                         </div>
                     </div>
                 </div>
